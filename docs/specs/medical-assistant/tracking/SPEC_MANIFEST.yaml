@@ -69,6 +69,40 @@ documents:
     owner: engineering
     status: active
     version: v0.1
+  - id: DEMO_RUNBOOK_3MIN
+    path: docs/specs/medical-assistant/DEMO_RUNBOOK_3MIN.md
+    purpose: 首轮 3 分钟固定演示链路与降级策略
+    priority: medium
+    depends_on:
+      - DEMO_SCENARIOS
+      - DEMO_SCENARIO_MAPPING
+      - EXECUTION_STATUS
+    owner: engineering
+    status: active
+    version: v0.1
+  - id: INTERVIEW_TALK_TRACK_3MIN
+    path: docs/specs/medical-assistant/INTERVIEW_TALK_TRACK_3MIN.md
+    purpose: 面试 / GitHub 展示的固定 3 分钟讲述口径
+    priority: medium
+    depends_on:
+      - PRODUCT_BRIEF
+      - PRD
+      - DEMO_RUNBOOK_3MIN
+      - EXECUTION_STATUS
+    owner: product
+    status: active
+    version: v0.1
+  - id: STARTUP_RUNBOOK
+    path: docs/specs/medical-assistant/STARTUP_RUNBOOK.md
+    purpose: 本地启动、最小验证、Dashboard 演示入口统一 runbook
+    priority: medium
+    depends_on:
+      - DEVELOPMENT_SPEC
+      - DEMO_RUNBOOK_3MIN
+      - EXECUTION_STATUS
+    owner: engineering
+    status: active
+    version: v0.1
   - id: AGENT_RUNBOOK
     path: docs/specs/medical-assistant/AGENT_RUNBOOK.md
     purpose: agent 执行协议
@@ -93,5 +127,28 @@ documents:
     priority: medium
     depends_on: []
     owner: engineering
+    status: active
+    version: v0.1
+  - id: DEMO_MATERIALS
+    path: docs/specs/medical-assistant/DEMO_MATERIALS.md
+    purpose: 展示材料准备规范（截图、GIF、讲稿、技术卡片）
+    priority: medium
+    depends_on:
+      - PRODUCT_BRIEF
+      - PRD
+      - DEMO_RUNBOOK_3MIN
+      - INTERVIEW_TALK_TRACK_3MIN
+    owner: product
+    status: active
+    version: v0.1
+  - id: INTERVIEW_TALK_TRACK_1MIN
+    path: docs/specs/medical-assistant/INTERVIEW_TALK_TRACK_1MIN.md
+    purpose: 面试 1 分钟快速讲述口径
+    priority: medium
+    depends_on:
+      - PRODUCT_BRIEF
+      - PRD
+      - INTERVIEW_TALK_TRACK_3MIN
+    owner: product
     status: active
     version: v0.1

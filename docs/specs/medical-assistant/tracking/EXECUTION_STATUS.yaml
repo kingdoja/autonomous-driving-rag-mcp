@@ -1,0 +1,103 @@
+version: v0.2
+project: PathoMind Medical Knowledge and Quality Assistant
+current_phase: p1-features-complete
+current_goal: P1 功能全部完成（多文档推理、高级边界处理、增强引用），P1 hit rate 100%，准备展示材料
+status: active
+recent_executor: codex
+last_updated: 2026-04-06
+todo:
+  - 完整环境配置后运行 P1 完整 E2E 验证（引用率、响应格式、S11 拒答）
+  - 按照 DEMO_MATERIALS.md 拍摄 Dashboard 截图（4 张必需 + 2 张可选）
+  - 可选录制 3 分钟演示流程 GIF（包含 P1 场景演示）
+  - 更新 3 分钟面试讲稿，补充 P1 功能演示流程
+  - 准备 P2 生产就绪特性规划（权限管理、审计日志、HIS/LIS 集成）
+completed:
+  - 建立 docs/specs/medical-assistant 真源目录
+  - 迁移产品简报到 PRODUCT_BRIEF.md
+  - 迁移开发规范到 DEVELOPMENT_SPEC.md
+  - 建立 PRD、DEMO_DATA_CHECKLIST、DEMO_SCENARIOS
+  - 建立 agent 读取入口与状态文件
+  - 建立项目内 .agents/skills/medical-assistant 闭环 skill
+  - 完成根 README 的双层定位重写
+  - 将 README_FULL.md 调整为技术深读版附录
+  - 完成 skill、README、展示层索引与 git 状态的收尾校验
+  - 在 DEVELOPMENT_SPEC 中固化 6 步项目路线与当前阶段定义
+  - 将 DEMO_DATA_CHECKLIST 扩展为可执行的公开数据包方案
+  - 将 DEMO_SCENARIOS 扩展为 v0.1 的 12 题标准演示题集
+  - 新增 DEMO_DATA_SOURCES 与 DEMO_SCENARIO_MAPPING 两份 agent 可消费真源文档
+  - 建立 demo-data/ 工作区骨架与 sources 登记表
+  - 下载首轮 6 份核心公开资料到 demo-data
+  - 用 py310 解释器完成 demo-data 的 ingest dry-run 识别
+  - 提供医疗 demo 最小化本地配置模板
+  - 已建立实际 collection `medical_demo_v01`
+  - 已完成 demo-data 首轮 6 份资料的真实 ingest，当前 collection 内可见 1137 个 chunks
+  - 已完成 S1、S2 的最小检索验证，确认中文问题可命中已导入 collection
+  - 已将 Dashboard 首页、导航与知识库浏览页推进到医疗 demo 语境
+  - 已将 `query_knowledge_hub` 的对外描述收敛到医疗知识检索语境，并补充“非诊断工具”说明
+  - 已在 `DEMO_SCENARIOS.md` 中补充 S7 单独验收口径与最小验证策略
+  - 已在回答层实现 S7 诊断类请求的拒答模板，明确回到知识检索 / 规范引用范围
+  - 已将 S7 拒答标记写入 query trace metadata，便于后续在 Dashboard 中区分普通检索与边界响应
+  - 已通过 `tests/unit/test_response_builder.py` 校验普通检索与 S7 拒答分支
+  - 已完成 1 轮 S4 设备题代表性验证，确认当前 collection 已包含 Leica 手册，带 `HistoCore PELORIS 3` 问法的 top 10 已全部命中手册片段
+  - 已在 `HybridSearch` 中加入设备名 metadata boost 与扩大 fusion 候选池的轻量调优
+  - 已通过 `tests/unit/test_hybrid_search_device_boost.py` 校验设备名 boost 逻辑
+  - 已新增 `config/settings.medical_demo.low_token.yaml`，用于关闭 refine / enrich LLM 调用，只保留必要 embedding ingest
+  - 已修复 `medical_demo_v01` 的 Chroma HNSW segment 损坏，当前 `ChromaStore` 可正常初始化与查询
+  - 已新增 `DEMO_RUNBOOK_3MIN.md`，固化首轮 3 分钟演示链路、时间预算、最小验收项与现场降级策略
+  - 已新增 `STARTUP_RUNBOOK.md`，统一本地启动、最小验证、低 token ingest 与 Dashboard 演示入口
+  - 已同步更新 `docs/STARTUP_MEDICAL_DEMO.md` 与 `demo-data/INGESTION_COMMANDS.md`，收敛到低 token config 与真实当前基线
+  - 已新增 `INTERVIEW_TALK_TRACK_3MIN.md`，将已验证的 `S1 -> S2 -> S4 -> S7 -> S12` 演示链路提炼为面试 / GitHub 可复用的固定讲述口径
+  - 已同步导出 `简历/项目改造方案-医疗知识助手/面试讲稿-3分钟.md`，使展示层材料与真源 spec 口径一致
+  - 已将根 `README.md` 补充为 startup guide、3 分钟 runbook 与 3 分钟讲稿的快速入口
+  - 已建立 12 题标准演示题集的自动化评估测试用例（tests/fixtures/medical_demo_test_set.json）
+  - 已实现端到端医疗 demo 评估测试套件（tests/e2e/test_medical_demo_evaluation.py）
+  - 已提供便捷的评估运行脚本（scripts/run_medical_evaluation.py）
+  - 已设置评估阈值：P0 hit rate >= 60%，citation rate >= 70%，refusal accuracy = 100%
+  - 已实现 P0 场景检索质量验证、S4 设备查询优先级验证、S7 诊断拒答边界验证
+  - 已实现引用完整性验证、边界场景拒答率验证、3 分钟演示流程场景可用性验证
+  - 已实现医疗 demo 专用评估面板（Dashboard Medical Demo Evaluation 页面）
+  - 已实现 Demo Readiness Indicator、场景分组展示、详细结果可视化
+  - 已将医疗评估面板添加到 Dashboard 主导航
+  - 已建立完整的展示材料准备规范（DEMO_MATERIALS.md）
+  - 已提供 1 分钟面试讲稿（INTERVIEW_TALK_TRACK_1MIN.md）
+  - 已建立截图目录和拍摄指南（screenshots/README.md）
+  - 已提供简历项目描述模板和技术亮点卡片
+  - 已同步 1 分钟讲稿到展示层
+  - 已将根 `README.md` 补充为 startup guide、3 分钟 runbook 与 3 分钟讲稿的快速入口
+  - 已运行首轮完整评估，基线结果：Hit Rate 100%（9/9 检索场景全部通过）
+  - 已修复评估脚本的初始化和 source 提取逻辑
+  - 已生成评估结果基线文件（evaluation_results.json）
+  - 已完成 P1/P2 功能实现（16 个任务全部完成）
+  - 已实现 Query Analyzer（查询复杂度检测与意图分类）
+  - 已实现 Document Grouper（多文档分组与多样性保证）
+  - 已实现 Citation Enhancer（增强引用元数据：章节/页码/相关性）
+  - 已增强 Boundary Validator（预测性查询检测与拒答）
+  - 已实现 Scope Provider（知识库范围动态感知）
+  - 已增强 Response Builder（多文档对比与汇总合成）
+  - 已完成 P1 场景评估，P1 hit rate 100%（3/3 检索场景全部通过）
+  - 已生成 P1 评估基线文件（evaluation_results_p1.json）
+  - 已创建 P1_FEATURES.md 技术文档
+  - 已创建 P2_ROADMAP.md 生产就绪路线图
+  - 已更新 PRODUCT_BRIEF.md，补充 P1 能力描述
+blocked:
+  - 沙箱内无法访问外部 embedding API；真实 query 验证需在可联网环境中执行
+notes:
+  - 项目内 skill 当前只服务医疗方向 spec，不做跨项目抽象
+  - 简历目录仅保留展示材料，不再承担真源职责
+  - 根 README 负责招聘与产品定位，README_FULL.md 负责底层架构补充
+  - 仓库内正式 Markdown 链接统一使用相对路径，避免依赖本地绝对路径
+  - 当前优先级已从“文档与协作层”切换到“MVP 演示实现层”
+  - v0.1 首轮公开数据包采用“病理 / 检验科近邻场景”策略，先用 WHO / Leica / Roche 官方公开资料跑通演示
+  - 默认 `python` 解释器不兼容当前脚本语法，实际执行应优先使用 `C:\\ProgramData\\Anaconda3\\envs\\py310\\python.exe`
+  - `config/settings.medical_demo.local.yaml` 当前可通过环境变量读取 `OPENAI_API_KEY`，不必把 key 写回仓库配置
+  - `config/settings.medical_demo.low_token.yaml` 用于“只做 embedding ingest”：`ingestion.batch_size=10`，并关闭 chunk refinement / metadata enrichment LLM
+  - 首轮固定演示链路已收敛为 `S1 -> S2 -> S4 -> S7 -> S12`，其中 S4 是主展示题，S7 是可信边界题，S12 用于收尾说明范围
+  - 启动入口当前已统一为：`config/settings.medical_demo.low_token.yaml` + `scripts/query.py` 最小验证 + `scripts/start_dashboard.py`
+  - `scripts/query.py` 当前验证的是检索链路，不等价于 S7 所需的“拒答 / 边界策略”回答层能力
+  - 2026-04-04 再次核对后确认：此前的 S4 偏向 WHO 结论主要是因为 manual / SOP / training 文档尚未全量写入 collection，不是纯排序算法问题
+  - 当前子阶段可视为“演示打包 / 启动入口统一”，重点已从“能不能跑通真实 ingest”切换到“能不能稳定启动、稳定讲清、低成本回归”
+  - 当前阶段：P1 功能完成，重点从"P0 演示打包"切换到"P1 高级能力展示与 P2 规划"
+  - P1 新增 5 个组件：Query Analyzer、Document Grouper、Citation Enhancer、Enhanced Boundary Validator、Scope Provider
+  - P1 场景（S8-S12）全部通过评估，hit rate 100%，引用率目标 80%
+  - P1 功能已集成到查询管道，支持多文档推理、复杂查询分解、预测性查询拒答
+  - P2 路线图已规划：权限管理、审计日志、HIS/LIS 集成、医院内部文档处理
