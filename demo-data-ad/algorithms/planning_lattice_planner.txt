@@ -1,0 +1,101 @@
+---
+document_type: algorithm_doc
+algorithm_type: planning
+algorithm_category: path_planning
+model: Lattice_Planner
+version: 1.0
+---
+
+# Lattice Planner 路径规划算法
+
+## 算法概述
+
+Lattice Planner 是一种基于采样的路径规划算法，通过在 Frenet 坐标系下生成候选轨迹，并评估选择最优轨迹。
+
+## 核心流程
+
+### 1. 坐标转换
+- 笛卡尔坐标 → Frenet 坐标
+- s: 沿参考线的纵向位置
+- d: 垂直于参考线的横向偏移
+
+### 2. 轨迹采样
+- **纵向采样**: 不同速度和加速度
+- **横向采样**: 不同车道偏移
+- **时间采样**: 1-5 秒预测时域
+
+### 3. 轨迹生成
+- **纵向**: 五次多项式 s(t)
+- **横向**: 五次多项式 d(t)
+- **约束**: 速度、加速度、曲率
+
+### 4. 代价函数
+```
+Cost = w1*comfort + w2*efficiency + w3*safety
+```
+
+- **舒适性**: 加速度、加加速度
+- **效率**: 速度偏差、时间
+- **安全性**: 碰撞风险、车道偏离
+
+## 参数配置
+
+```yaml
+# 采样参数
+lateral_samples: 7  # 横向采样数
+speed_samples: 5    # 速度采样数
+time_samples: 5     # 时间采样数
+
+# 约束
+max_speed: 30 m/s
+max_accel: 3 m/s²
+max_jerk: 2 m/s³
+max_curvature: 0.2 1/m
+
+# 权重
+w_comfort: 1.0
+w_efficiency: 2.0
+w_safety: 10.0
+```
+
+## 性能指标
+
+- **规划频率**: 10 Hz
+- **计算时间**: < 100 ms
+- **成功率**: > 95%
+- **舒适度**: 加速度 < 2 m/s²
+
+## 代码示例
+
+```python
+class LatticePlanner:
+    def plan(self, ego_state, obstacles, reference_line):
+        # 1. 生成候选轨迹
+        trajectories = self.generate_trajectories(ego_state)
+        
+        # 2. 碰撞检测
+        safe_trajectories = self.collision_check(trajectories, obstacles)
+        
+        # 3. 代价评估
+        costs = [self.evaluate_cost(traj) for traj in safe_trajectories]
+        
+        # 4. 选择最优轨迹
+        best_idx = np.argmin(costs)
+        return safe_trajectories[best_idx]
+```
+
+## 应用场景
+
+- **高速公路**: 车道保持、变道
+- **城市道路**: 跟车、避障
+- **泊车**: 平行泊车、垂直泊车
+
+## 参考资料
+
+- **论文**: Optimal Trajectory Generation for Dynamic Street Scenarios in a Frenet Frame
+- **代码**: Apollo Planning Module
+
+---
+
+**文档版本**: 1.0  
+**发布日期**: 2024-01-15

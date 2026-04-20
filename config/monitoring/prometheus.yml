@@ -1,0 +1,58 @@
+# Prometheus configuration for AD Knowledge Retrieval System
+# This file configures Prometheus to scrape metrics from the AD knowledge system
+
+global:
+  scrape_interval: 15s  # Scrape metrics every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  external_labels:
+    cluster: 'ad-knowledge-system'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'localhost:9093'
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - 'alert_rules.yml'
+
+# Scrape configurations
+scrape_configs:
+  # AD Knowledge System metrics
+  - job_name: 'ad_knowledge_system'
+    static_configs:
+      - targets: ['localhost:8000']  # Adjust port as needed
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    
+  # Python application metrics (if using prometheus_client)
+  - job_name: 'python_app'
+    static_configs:
+      - targets: ['localhost:8001']
+    metrics_path: '/metrics'
+    
+  # Node exporter for system metrics
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+    
+  # Chroma database metrics (if exposed)
+  - job_name: 'chroma_db'
+    static_configs:
+      - targets: ['localhost:8002']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+# Remote write configuration (optional, for long-term storage)
+# remote_write:
+#   - url: 'http://remote-prometheus:9090/api/v1/write'
+#     queue_config:
+#       capacity: 10000
+#       max_shards: 5
+#       min_shards: 1
+#       max_samples_per_send: 5000
+#       batch_send_deadline: 5s

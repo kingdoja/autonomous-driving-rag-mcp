@@ -189,6 +189,20 @@ data/db/bm25/
 # Internal project docs (not for public repo)
 docs/specs/medical-assistant/
 GITHUB_PREPARATION.md
+docs/GIT_GUIDE.md
+docs/DEPLOYMENT.md
 
 # Test data
 test_data/
+
+# Task completion summaries
+demo-data-ad/TASK_*_COMPLETION_SUMMARY.md
+demo-data-ad/DOCUMENT_COLLECTION_COMPLETE.md
+demo-data-ad/INGESTION_VERIFICATION_REPORT.md
+demo-data-ad/TASK_*_INGESTION_STATUS.md
+
+# Production deployment scripts (may contain sensitive info)
+scripts/deploy_*.sh
+scripts/rollback_*.sh
+scripts/monitor_production.sh
+scripts/production_smoke_tests*.py

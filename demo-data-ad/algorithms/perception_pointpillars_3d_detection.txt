@@ -1,0 +1,119 @@
+---
+document_type: algorithm_doc
+algorithm_type: perception
+algorithm_category: 3d_object_detection
+model: PointPillars
+version: 1.0
+---
+
+# PointPillars 3D 目标检测算法
+
+## 算法概述
+
+PointPillars 是一种基于点云的 3D 目标检测算法，将点云编码为伪图像，使用 2D 卷积网络进行检测，实现了速度和精度的平衡。
+
+## 网络架构
+
+### 1. Pillar Feature Net
+- **输入**: 原始点云 (N × 4)
+- **Pillar 划分**: XY 平面网格化
+- **特征编码**: PointNet 提取 pillar 特征
+- **输出**: 伪图像 (H × W × C)
+
+### 2. Backbone (2D CNN)
+- **网络**: RPN (类似 VGG)
+- **下采样**: 3 个阶段 (S=2, 4, 8)
+- **特征融合**: FPN
+
+### 3. Detection Head
+- **分类头**: 类别预测
+- **回归头**: 3D 边界框 (x, y, z, w, l, h, θ)
+- **方向头**: 方向分类
+
+## 核心特性
+
+### Pillar 编码
+```python
+# Pillar 尺寸
+pillar_x = 0.16  # m
+pillar_y = 0.16  # m
+max_points_per_pillar = 100
+max_pillars = 12000
+
+# 特征
+features = [x, y, z, intensity, x_c, y_c, z_c, x_p, y_p]
+# x_c, y_c, z_c: 相对 pillar 中心
+# x_p, y_p: 相对 pillar 中心
+```
+
+### 损失函数
+```
+Loss = L_cls + L_reg + L_dir
+
+L_cls: Focal Loss
+L_reg: Smooth L1 Loss
+L_dir: Cross Entropy Loss
+```
+
+## 性能指标
+
+### KITTI 数据集
+| 类别 | Easy | Moderate | Hard |
+|------|------|----------|------|
+| Car | 88.35 | 86.10 | 83.83 |
+| Pedestrian | 58.66 | 55.78 | 52.92 |
+| Cyclist | 79.14 | 62.25 | 56.04 |
+
+### 速度
+- **FPS**: 62 (V100 GPU)
+- **延迟**: 16 ms
+
+## 训练配置
+
+```yaml
+dataset: KITTI / nuScenes
+epochs: 160
+batch_size: 4
+optimizer: AdamW
+lr: 0.001
+point_cloud_range: [0, -40, -3, 70, 40, 1]
+voxel_size: [0.16, 0.16, 4]
+```
+
+## 部署优化
+
+- **TensorRT**: FP16, 100+ FPS
+- **ONNX**: 跨平台
+- **量化**: INT8, 精度损失 < 2%
+
+## 代码示例
+
+```python
+import torch
+from pointpillars import PointPillars
+
+model = PointPillars(num_classes=3)
+model.load_state_dict(torch.load('pointpillars.pth'))
+model.eval()
+
+# 推理
+with torch.no_grad():
+    detections = model(point_cloud)
+    # detections: [N, 9] (x, y, z, w, l, h, θ, cls, score)
+```
+
+## 应用场景
+
+- **城市道路**: 车辆、行人、自行车检测
+- **高速公路**: 远距离车辆检测
+- **泊车**: 近距离障碍物检测
+
+## 参考资料
+
+- **论文**: PointPillars: Fast Encoders for Object Detection from Point Clouds
+- **代码**: https://github.com/nutonomy/second.pytorch
+
+---
+
+**文档版本**: 1.0  
+**发布日期**: 2024-01-15

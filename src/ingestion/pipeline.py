@@ -141,12 +141,17 @@ class IngestionPipeline:
         self.integrity_checker = SQLiteIntegrityChecker(db_path=str(resolve_path("data/db/ingestion_history.db")))
         logger.info("  ✓ FileIntegrityChecker initialized")
         
-        # Stage 2: Loader
-        self.loader = PdfLoader(
+        # Stage 2: Loaders (support multiple formats)
+        self.pdf_loader = PdfLoader(
             extract_images=True,
             image_storage_dir=str(resolve_path(f"data/images/{collection}"))
         )
         logger.info("  ✓ PdfLoader initialized")
+        
+        # Import TextLoader
+        from src.libs.loader.text_loader import TextLoader
+        self.text_loader = TextLoader()
+        logger.info("  ✓ TextLoader initialized")
         
         # Stage 3: Chunker
         self.chunker = DocumentChunker(settings)
@@ -193,6 +198,26 @@ class IngestionPipeline:
         logger.info("  ✓ ImageStorage initialized")
         
         logger.info("Pipeline initialization complete!")
+    
+    def _get_loader(self, file_path: Path):
+        """Select appropriate loader based on file extension.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            Appropriate loader instance
+            
+        Raises:
+            ValueError: If file extension is not supported
+        """
+        suffix = file_path.suffix.lower()
+        if suffix == '.pdf':
+            return self.pdf_loader
+        elif suffix in ['.txt', '.md']:
+            return self.text_loader
+        else:
+            raise ValueError(f"Unsupported file type: {suffix}. Supported: .pdf, .txt, .md")
     
     def run(
         self,
@@ -255,7 +280,9 @@ class IngestionPipeline:
             _notify("load", 2)
             
             _t0 = time.monotonic()
-            document = self.loader.load(str(file_path))
+            # Select appropriate loader based on file extension
+            loader = self._get_loader(file_path)
+            document = loader.load(str(file_path))
             _elapsed = (time.monotonic() - _t0) * 1000.0
             
             text_preview = document.text[:200].replace('\n', ' ') + "..." if len(document.text) > 200 else document.text

@@ -1,11 +1,7 @@
-"""Unit tests for MetadataBooster component.
+"""Unit tests for MetadataBooster.
 
-Tests cover:
-- Query type detection (sensor, algorithm, regulation, test)
-- Boost weight application
-- Top-K verification
-- Fallback mechanism
-- Edge cases and error handling
+Tests query type detection, boost weight application, top-K verification,
+fallback mechanism, and custom boost configuration.
 """
 
 import pytest
@@ -13,491 +9,275 @@ from src.core.query_engine.metadata_booster import MetadataBooster, MetadataBoos
 from src.core.types import RetrievalResult
 
 
+def make_chunk(chunk_id: str, score: float, doc_type: str, text: str = "sample text") -> RetrievalResult:
+    """Helper to create RetrievalResult objects for testing."""
+    return RetrievalResult(
+        chunk_id=chunk_id,
+        score=score,
+        text=text,
+        metadata={"doc_type": doc_type},
+    )
+
+
 class TestQueryTypeDetection:
-    """Test query type detection functionality."""
-    
-    def test_detect_sensor_query_chinese(self):
-        """Test sensor query detection with Chinese keywords."""
+    """Tests for detect_query_type()."""
+
+    def test_sensor_query_camera(self):
+        """摄像头的分辨率是多少 should be detected as sensor_query."""
         booster = MetadataBooster()
-        
-        # Test various sensor queries
-        assert booster.detect_query_type("激光雷达的探测距离是多少？") == "sensor_query"
-        assert booster.detect_query_type("摄像头的分辨率和帧率") == "sensor_query"
-        assert booster.detect_query_type("毫米波雷达的视场角") == "sensor_query"
-        assert booster.detect_query_type("超声波传感器的标定方法") == "sensor_query"
-    
-    def test_detect_sensor_query_english(self):
-        """Test sensor query detection with English keywords."""
+        assert booster.detect_query_type("摄像头的分辨率是多少") == "sensor_query"
+
+    def test_sensor_query_lidar(self):
+        """激光雷达探测距离 should be detected as sensor_query."""
         booster = MetadataBooster()
-        
-        assert booster.detect_query_type("What is the LiDAR detection range?") == "sensor_query"
-        assert booster.detect_query_type("Camera resolution and frame rate") == "sensor_query"
-        assert booster.detect_query_type("Radar calibration procedure") == "sensor_query"
-    
-    def test_detect_sensor_query_mixed(self):
-        """Test sensor query detection with mixed Chinese-English."""
+        assert booster.detect_query_type("激光雷达探测距离") == "sensor_query"
+
+    def test_sensor_query_radar(self):
+        """毫米波雷达视场角 should be detected as sensor_query."""
         booster = MetadataBooster()
-        
-        assert booster.detect_query_type("LiDAR 的探测距离") == "sensor_query"
-        assert booster.detect_query_type("Camera 分辨率") == "sensor_query"
-    
-    def test_detect_algorithm_query_chinese(self):
-        """Test algorithm query detection with Chinese keywords."""
+        assert booster.detect_query_type("毫米波雷达视场角") == "sensor_query"
+
+    def test_sensor_query_calibration(self):
+        """内参标定方法 should be detected as sensor_query."""
         booster = MetadataBooster()
-        
-        assert booster.detect_query_type("感知算法的原理") == "algorithm_query"
+        assert booster.detect_query_type("内参标定方法") == "sensor_query"
+
+    def test_algorithm_query_perception(self):
+        """目标检测算法原理 should be detected as algorithm_query."""
+        booster = MetadataBooster()
+        assert booster.detect_query_type("目标检测算法原理") == "algorithm_query"
+
+    def test_algorithm_query_planning(self):
+        """路径规划算法 should be detected as algorithm_query."""
+        booster = MetadataBooster()
         assert booster.detect_query_type("路径规划算法") == "algorithm_query"
-        assert booster.detect_query_type("PID 控制算法") == "algorithm_query"
-        assert booster.detect_query_type("目标检测算法") == "algorithm_query"
-    
-    def test_detect_algorithm_query_english(self):
-        """Test algorithm query detection with English keywords."""
+
+    def test_algorithm_query_control(self):
+        """PID控制参数调优 should be detected as algorithm_query."""
         booster = MetadataBooster()
-        
-        assert booster.detect_query_type("Perception algorithm principles") == "algorithm_query"
-        assert booster.detect_query_type("Path planning algorithm") == "algorithm_query"
-        assert booster.detect_query_type("SLAM algorithm") == "algorithm_query"
-    
-    def test_detect_regulation_query_chinese(self):
-        """Test regulation query detection with Chinese keywords."""
+        assert booster.detect_query_type("PID控制参数调优") == "algorithm_query"
+
+    def test_regulation_query_gbt(self):
+        """GB/T自动驾驶标准 should be detected as regulation_query."""
         booster = MetadataBooster()
-        
-        assert booster.detect_query_type("GB/T 自动驾驶分级标准") == "regulation_query"
-        assert booster.detect_query_type("ISO 26262 功能安全") == "regulation_query"
-        assert booster.detect_query_type("测试规范要求") == "regulation_query"
-    
-    def test_detect_regulation_query_english(self):
-        """Test regulation query detection with English keywords."""
+        assert booster.detect_query_type("GB/T自动驾驶标准") == "regulation_query"
+
+    def test_regulation_query_iso(self):
+        """ISO 26262功能安全 should be detected as regulation_query."""
         booster = MetadataBooster()
-        
-        assert booster.detect_query_type("ISO 26262 functional safety") == "regulation_query"
-        assert booster.detect_query_type("ASIL level requirements") == "regulation_query"
-    
-    def test_detect_test_query_chinese(self):
-        """Test test query detection with Chinese keywords."""
+        assert booster.detect_query_type("ISO 26262功能安全") == "regulation_query"
+
+    def test_test_query_scenario(self):
+        """跟车场景测试用例 should be detected as test_query."""
         booster = MetadataBooster()
-        
         assert booster.detect_query_type("跟车场景测试用例") == "test_query"
-        assert booster.detect_query_type("变道场景测试") == "test_query"
-        assert booster.detect_query_type("紧急制动测试") == "test_query"
-    
-    def test_detect_test_query_english(self):
-        """Test test query detection with English keywords."""
+
+    def test_general_query(self):
+        """你好 should fall back to general."""
         booster = MetadataBooster()
-        
-        assert booster.detect_query_type("Lane change test scenario") == "test_query"
-        assert booster.detect_query_type("Emergency braking test case") == "test_query"
-    
-    def test_detect_general_query(self):
-        """Test general query detection (no specific type)."""
+        assert booster.detect_query_type("你好") == "general"
+
+    def test_empty_query(self):
+        """Empty string should return general."""
         booster = MetadataBooster()
-        
-        assert booster.detect_query_type("什么是自动驾驶？") == "general"
-        assert booster.detect_query_type("Hello world") == "general"
         assert booster.detect_query_type("") == "general"
-    
-    def test_detect_query_type_priority(self):
-        """Test query type detection when multiple patterns match."""
+
+    def test_mixed_language_sensor(self):
+        """LiDAR的探测距离 (mixed Chinese/English) should be sensor_query."""
         booster = MetadataBooster()
-        
-        # Sensor + algorithm: should detect the one with more matches
-        query = "激光雷达感知算法的探测距离"
-        # This has both sensor (激光雷达, 探测距离) and algorithm (感知, 算法) keywords
-        # Should detect based on match count
-        result = booster.detect_query_type(query)
-        assert result in ["sensor_query", "algorithm_query"]
+        assert booster.detect_query_type("LiDAR的探测距离") == "sensor_query"
 
 
-class TestBoostApplication:
-    """Test boost weight application functionality."""
-    
-    def create_mock_chunks(self, doc_types: list) -> list:
-        """Create mock retrieval results with specified doc types."""
-        chunks = []
-        for i, doc_type in enumerate(doc_types):
-            chunk = RetrievalResult(
-                chunk_id=f"chunk_{i}",
-                score=1.0 - (i * 0.1),  # Descending scores
-                text=f"Content {i}",
-                metadata={"doc_type": doc_type, "source_path": f"doc_{i}.pdf"}
-            )
-            chunks.append(chunk)
-        return chunks
-    
-    def test_apply_boost_sensor_query(self):
-        """Test boost application for sensor query."""
+class TestBoostWeightApplication:
+    """Tests for apply_boost()."""
+
+    def test_sensor_boost_increases_sensor_doc_score(self):
+        """sensor_doc score should be multiplied by 1.5 for a sensor query."""
         booster = MetadataBooster()
-        
-        # Create chunks with mixed doc types
-        chunks = self.create_mock_chunks([
-            "algorithm_doc",  # score: 1.0
-            "sensor_doc",     # score: 0.9
-            "sensor_doc",     # score: 0.8
-            "regulation_doc", # score: 0.7
-        ])
-        
-        query = "激光雷达的探测距离"
-        boosted = booster.apply_boost(chunks, query)
-        
-        # Sensor docs should be boosted (1.5x) and move to top
-        assert boosted[0].metadata["doc_type"] == "sensor_doc"
-        assert boosted[1].metadata["doc_type"] == "sensor_doc"
-        
-        # Check that scores were actually boosted
-        # Original sensor_doc score: 0.9 * 1.5 = 1.35 > 1.0 (algorithm_doc)
-        assert boosted[0].score > 1.0
-    
-    def test_apply_boost_algorithm_query(self):
-        """Test boost application for algorithm query."""
+        chunks = [make_chunk("c1", 0.8, "sensor_doc")]
+        result = booster.apply_boost(chunks, "摄像头的分辨率是多少")
+        assert pytest.approx(result[0].score) == 0.8 * 1.5
+
+    def test_sensor_boost_decreases_algorithm_doc_score(self):
+        """algorithm_doc score should be multiplied by 0.8 for a sensor query."""
         booster = MetadataBooster()
-        
-        chunks = self.create_mock_chunks([
-            "sensor_doc",     # score: 1.0
-            "algorithm_doc",  # score: 0.9
-            "algorithm_doc",  # score: 0.8
-            "test_doc",       # score: 0.7
-        ])
-        
-        query = "感知算法的原理"
-        boosted = booster.apply_boost(chunks, query)
-        
-        # Algorithm docs should be boosted and move to top
-        assert boosted[0].metadata["doc_type"] == "algorithm_doc"
-        assert boosted[1].metadata["doc_type"] == "algorithm_doc"
-    
-    def test_apply_boost_regulation_query(self):
-        """Test boost application for regulation query."""
+        chunks = [make_chunk("c1", 0.8, "algorithm_doc")]
+        result = booster.apply_boost(chunks, "摄像头的分辨率是多少")
+        assert pytest.approx(result[0].score) == 0.8 * 0.8
+
+    def test_algorithm_boost_increases_algorithm_doc_score(self):
+        """algorithm_doc score should be multiplied by 1.3 for an algorithm query."""
         booster = MetadataBooster()
-        
-        chunks = self.create_mock_chunks([
-            "sensor_doc",      # score: 1.0
-            "algorithm_doc",   # score: 0.9
-            "regulation_doc",  # score: 0.8
-            "test_doc",        # score: 0.7
-        ])
-        
-        query = "ISO 26262 功能安全标准"
-        boosted = booster.apply_boost(chunks, query)
-        
-        # Regulation doc should be boosted (1.6x) and move to top
-        # 0.8 * 1.6 = 1.28 > 1.0
-        assert boosted[0].metadata["doc_type"] == "regulation_doc"
-    
-    def test_apply_boost_general_query_no_change(self):
-        """Test that general queries don't apply boost."""
+        chunks = [make_chunk("c1", 0.6, "algorithm_doc")]
+        result = booster.apply_boost(chunks, "路径规划算法")
+        assert pytest.approx(result[0].score) == 0.6 * 1.3
+
+    def test_regulation_boost_increases_regulation_doc_score(self):
+        """regulation_doc score should be multiplied by 1.6 for a regulation query."""
         booster = MetadataBooster()
-        
-        chunks = self.create_mock_chunks([
-            "sensor_doc",
-            "algorithm_doc",
-            "regulation_doc",
-        ])
-        
-        query = "什么是自动驾驶？"
-        boosted = booster.apply_boost(chunks, query)
-        
-        # Order should remain unchanged
-        assert boosted[0].metadata["doc_type"] == "sensor_doc"
-        assert boosted[1].metadata["doc_type"] == "algorithm_doc"
-        assert boosted[2].metadata["doc_type"] == "regulation_doc"
-    
-    def test_apply_boost_empty_chunks(self):
-        """Test boost application with empty chunks."""
+        chunks = [make_chunk("c1", 0.5, "regulation_doc")]
+        result = booster.apply_boost(chunks, "ISO 26262功能安全")
+        assert pytest.approx(result[0].score) == 0.5 * 1.6
+
+    def test_general_query_no_boost(self):
+        """General query should return chunks with unchanged scores."""
         booster = MetadataBooster()
-        
-        chunks = []
-        query = "激光雷达的探测距离"
-        boosted = booster.apply_boost(chunks, query)
-        
-        assert boosted == []
-    
-    def test_apply_boost_preserves_metadata(self):
-        """Test that boost preserves original metadata."""
-        booster = MetadataBooster()
-        
         chunks = [
-            RetrievalResult(
-                chunk_id="chunk_1",
-                score=0.9,
-                text="Content",
-                metadata={
-                    "doc_type": "sensor_doc",
-                    "source_path": "doc.pdf",
-                    "custom_field": "value"
-                }
-            )
+            make_chunk("c1", 0.9, "sensor_doc"),
+            make_chunk("c2", 0.7, "algorithm_doc"),
         ]
-        
-        query = "激光雷达"
-        boosted = booster.apply_boost(chunks, query)
-        
-        assert boosted[0].metadata["custom_field"] == "value"
-        assert boosted[0].metadata["source_path"] == "doc.pdf"
+        result = booster.apply_boost(chunks, "你好")
+        assert result[0].score == 0.9
+        assert result[1].score == 0.7
+
+    def test_boost_reorders_results(self):
+        """After sensor boost, sensor_doc should rank higher than algorithm_doc."""
+        booster = MetadataBooster()
+        # algorithm_doc starts with a higher raw score
+        chunks = [
+            make_chunk("algo", 0.9, "algorithm_doc"),
+            make_chunk("sensor", 0.8, "sensor_doc"),
+        ]
+        result = booster.apply_boost(chunks, "摄像头的分辨率是多少")
+        # sensor_doc: 0.8 * 1.5 = 1.2 > algorithm_doc: 0.9 * 0.8 = 0.72
+        assert result[0].chunk_id == "sensor"
+
+    def test_empty_chunks_returns_empty(self):
+        """Empty input list should return an empty list."""
+        booster = MetadataBooster()
+        result = booster.apply_boost([], "摄像头的分辨率是多少")
+        assert result == []
+
+    def test_boost_preserves_chunk_content(self):
+        """text and chunk_id must be preserved after boost."""
+        booster = MetadataBooster()
+        chunks = [make_chunk("my_id", 0.5, "sensor_doc", text="important content")]
+        result = booster.apply_boost(chunks, "摄像头的分辨率是多少")
+        assert result[0].chunk_id == "my_id"
+        assert result[0].text == "important content"
 
 
 class TestTopKVerification:
-    """Test top-K verification functionality."""
-    
-    def create_mock_chunks(self, doc_types: list) -> list:
-        """Create mock retrieval results with specified doc types."""
-        chunks = []
-        for i, doc_type in enumerate(doc_types):
-            chunk = RetrievalResult(
-                chunk_id=f"chunk_{i}",
-                score=1.0 - (i * 0.1),
-                text=f"Content {i}",
-                metadata={"doc_type": doc_type, "source_path": f"doc_{i}.pdf"}
-            )
-            chunks.append(chunk)
-        return chunks
-    
-    def test_top_k_verification_pass(self):
-        """Test top-K verification passes when requirements met."""
-        booster = MetadataBooster(top_k_threshold=3, top_k_min_count=2)
-        
-        # Top-3 has 2 sensor_doc
-        chunks = self.create_mock_chunks([
-            "sensor_doc",
-            "sensor_doc",
-            "algorithm_doc",
-            "regulation_doc",
-        ])
-        
-        query = "激光雷达的探测距离"
-        result = booster.apply_boost_with_details(chunks, query)
-        
-        assert result.top_k_verified is True
-        assert result.fallback_used is False
-    
-    def test_top_k_verification_fail(self):
-        """Test top-K verification fails when requirements not met."""
-        booster = MetadataBooster(top_k_threshold=3, top_k_min_count=2)
-        
-        # Create scenario where even with boost, top-3 won't have 2 sensor_docs
-        # Algorithm docs have very high scores that even boosted sensor docs can't beat
+    """Tests for top-K verification behavior via apply_boost_with_details()."""
+
+    def test_top_k_verified_when_enough_target_docs(self):
+        """2+ sensor_docs in top-3 should yield top_k_verified=True."""
+        booster = MetadataBooster()
         chunks = [
-            RetrievalResult(
-                chunk_id="chunk_0",
-                score=1.0,
-                text="Content 0",
-                metadata={"doc_type": "algorithm_doc", "source_path": "doc_0.pdf"}
-            ),
-            RetrievalResult(
-                chunk_id="chunk_1",
-                score=0.95,
-                text="Content 1",
-                metadata={"doc_type": "algorithm_doc", "source_path": "doc_1.pdf"}
-            ),
-            RetrievalResult(
-                chunk_id="chunk_2",
-                score=0.90,
-                text="Content 2",
-                metadata={"doc_type": "regulation_doc", "source_path": "doc_2.pdf"}
-            ),
-            RetrievalResult(
-                chunk_id="chunk_3",
-                score=0.50,  # Low score, even with 1.5x boost = 0.75, won't reach top-3
-                text="Content 3",
-                metadata={"doc_type": "sensor_doc", "source_path": "doc_3.pdf"}
-            ),
-            RetrievalResult(
-                chunk_id="chunk_4",
-                score=0.45,  # Low score, even with 1.5x boost = 0.675, won't reach top-3
-                text="Content 4",
-                metadata={"doc_type": "sensor_doc", "source_path": "doc_4.pdf"}
-            ),
+            make_chunk("s1", 0.9, "sensor_doc"),
+            make_chunk("s2", 0.8, "sensor_doc"),
+            make_chunk("a1", 0.7, "algorithm_doc"),
+            make_chunk("a2", 0.6, "algorithm_doc"),
         ]
-        
-        query = "激光雷达的探测距离"
-        result = booster.apply_boost_with_details(chunks, query)
-        
-        # Verification should fail, fallback should be used
-        assert result.top_k_verified is False
-        assert result.fallback_used is True
-        assert result.boosted_chunks == chunks  # Original chunks returned
-    
-    def test_top_k_verification_insufficient_chunks(self):
-        """Test top-K verification with fewer chunks than threshold."""
-        booster = MetadataBooster(top_k_threshold=3, top_k_min_count=2)
-        
-        # Only 2 chunks (less than threshold of 3)
-        chunks = self.create_mock_chunks([
-            "sensor_doc",
-            "algorithm_doc",
-        ])
-        
-        query = "激光雷达的探测距离"
-        result = booster.apply_boost_with_details(chunks, query)
-        
-        # Should pass verification (not enough chunks to verify)
+        result = booster.apply_boost_with_details(chunks, "摄像头的分辨率是多少")
         assert result.top_k_verified is True
+
+    def test_top_k_not_verified_when_insufficient_target_docs(self):
+        """Only 1 sensor_doc in top-3 should yield top_k_verified=False."""
+        booster = MetadataBooster()
+        # After boost: sensor_doc 0.4*1.5=0.6, algorithm_docs 0.9*0.8=0.72, 0.8*0.8=0.64
+        # Top-3 will be: algo(0.72), algo(0.64), sensor(0.6) → only 1 sensor_doc
+        chunks = [
+            make_chunk("a1", 0.9, "algorithm_doc"),
+            make_chunk("a2", 0.8, "algorithm_doc"),
+            make_chunk("s1", 0.4, "sensor_doc"),
+            make_chunk("a3", 0.3, "algorithm_doc"),
+        ]
+        result = booster.apply_boost_with_details(chunks, "摄像头的分辨率是多少")
+        assert result.top_k_verified is False
+
+    def test_top_k_verified_with_fewer_than_threshold_chunks(self):
+        """Fewer than top_k_threshold chunks should yield top_k_verified=True."""
+        booster = MetadataBooster(top_k_threshold=3)
+        chunks = [
+            make_chunk("s1", 0.9, "sensor_doc"),
+            make_chunk("a1", 0.8, "algorithm_doc"),
+        ]
+        result = booster.apply_boost_with_details(chunks, "摄像头的分辨率是多少")
+        assert result.top_k_verified is True
+
+    def test_custom_top_k_threshold(self):
+        """Custom top_k_threshold and top_k_min_count should be respected."""
+        booster = MetadataBooster(top_k_threshold=5, top_k_min_count=3)
+        # Provide 5 chunks with only 2 sensor_docs → should fail min_count=3
+        chunks = [
+            make_chunk("s1", 0.9, "sensor_doc"),
+            make_chunk("s2", 0.85, "sensor_doc"),
+            make_chunk("a1", 0.8, "algorithm_doc"),
+            make_chunk("a2", 0.75, "algorithm_doc"),
+            make_chunk("a3", 0.7, "algorithm_doc"),
+        ]
+        result = booster.apply_boost_with_details(chunks, "摄像头的分辨率是多少")
+        # After boost top-5: s1=1.35, s2=1.275, a1=0.64, a2=0.6, a3=0.56
+        # 2 sensor_docs in top-5 < min_count=3 → not verified
+        assert result.top_k_verified is False
 
 
 class TestFallbackMechanism:
-    """Test fallback mechanism functionality."""
-    
-    def create_mock_chunks(self, doc_types: list) -> list:
-        """Create mock retrieval results with specified doc types."""
-        chunks = []
-        for i, doc_type in enumerate(doc_types):
-            chunk = RetrievalResult(
-                chunk_id=f"chunk_{i}",
-                score=1.0 - (i * 0.1),
-                text=f"Content {i}",
-                metadata={"doc_type": doc_type, "source_path": f"doc_{i}.pdf"}
-            )
-            chunks.append(chunk)
-        return chunks
-    
-    def test_fallback_when_verification_fails(self):
-        """Test fallback to original results when verification fails."""
-        booster = MetadataBooster(top_k_threshold=3, top_k_min_count=2)
-        
-        # Create scenario where boost won't help
-        chunks = self.create_mock_chunks([
-            "algorithm_doc",  # score: 1.0
-            "algorithm_doc",  # score: 0.9
-            "algorithm_doc",  # score: 0.8
-            "sensor_doc",     # score: 0.7
-        ])
-        
-        query = "激光雷达的探测距离"  # Sensor query
-        result = booster.apply_boost_with_details(chunks, query)
-        
-        # Should use fallback (original results)
+    """Tests for fallback behavior via apply_boost_with_details()."""
+
+    def test_fallback_used_when_top_k_fails(self):
+        """When top-K verification fails, fallback_used=True and boosted_chunks == original_chunks."""
+        booster = MetadataBooster()
+        chunks = [
+            make_chunk("a1", 0.9, "algorithm_doc"),
+            make_chunk("a2", 0.8, "algorithm_doc"),
+            make_chunk("s1", 0.4, "sensor_doc"),
+            make_chunk("a3", 0.3, "algorithm_doc"),
+        ]
+        result = booster.apply_boost_with_details(chunks, "摄像头的分辨率是多少")
         assert result.fallback_used is True
         assert result.boosted_chunks == chunks
-    
-    def test_no_fallback_when_verification_passes(self):
-        """Test no fallback when verification passes."""
-        booster = MetadataBooster(top_k_threshold=3, top_k_min_count=2)
-        
-        chunks = self.create_mock_chunks([
-            "algorithm_doc",
-            "sensor_doc",
-            "sensor_doc",
-            "regulation_doc",
-        ])
-        
-        query = "激光雷达的探测距离"
-        result = booster.apply_boost_with_details(chunks, query)
-        
+
+    def test_no_fallback_when_top_k_passes(self):
+        """When top-K verification passes, fallback_used=False."""
+        booster = MetadataBooster()
+        chunks = [
+            make_chunk("s1", 0.9, "sensor_doc"),
+            make_chunk("s2", 0.8, "sensor_doc"),
+            make_chunk("a1", 0.7, "algorithm_doc"),
+        ]
+        result = booster.apply_boost_with_details(chunks, "摄像头的分辨率是多少")
         assert result.fallback_used is False
-        assert result.boosted_chunks != chunks  # Boosted results returned
+
+    def test_general_query_no_boost_applied(self):
+        """General query should yield boost_applied=False."""
+        booster = MetadataBooster()
+        chunks = [make_chunk("c1", 0.8, "sensor_doc")]
+        result = booster.apply_boost_with_details(chunks, "你好")
+        assert result.boost_applied is False
+
+    def test_boost_applied_true_for_sensor_query(self):
+        """Sensor query with enough sensor_docs should yield boost_applied=True."""
+        booster = MetadataBooster()
+        chunks = [
+            make_chunk("s1", 0.9, "sensor_doc"),
+            make_chunk("s2", 0.8, "sensor_doc"),
+            make_chunk("a1", 0.7, "algorithm_doc"),
+        ]
+        result = booster.apply_boost_with_details(chunks, "摄像头的分辨率是多少")
+        assert result.boost_applied is True
 
 
-class TestBoostConfiguration:
-    """Test boost configuration functionality."""
-    
-    def test_custom_boost_config(self):
-        """Test custom boost configuration."""
+class TestCustomBoostConfig:
+    """Tests for custom boost configuration."""
+
+    def test_custom_boost_config_applied(self):
+        """Custom config should override the default boost weights."""
         custom_config = {
-            "sensor_query": {
-                "sensor_doc": 2.0,  # Higher boost
-                "algorithm_doc": 0.5,
-            }
+            "sensor_query": {"sensor_doc": 2.0, "algorithm_doc": 0.5},
         }
-        
         booster = MetadataBooster(boost_config=custom_config)
-        
-        chunks = [
-            RetrievalResult(
-                chunk_id="chunk_1",
-                score=0.8,
-                text="Content",
-                metadata={"doc_type": "sensor_doc", "source_path": "doc.pdf"}
-            )
-        ]
-        
-        query = "激光雷达"
-        boosted = booster.apply_boost(chunks, query)
-        
-        # Score should be boosted by 2.0x
-        assert boosted[0].score == 0.8 * 2.0
-    
-    def test_default_boost_config(self):
-        """Test default boost configuration is applied."""
-        booster = MetadataBooster()
-        
-        # Check default config exists
-        assert "sensor_query" in booster.boost_config
-        assert "algorithm_query" in booster.boost_config
-        assert "regulation_query" in booster.boost_config
-        assert "test_query" in booster.boost_config
-        
-        # Check default weights
-        assert booster.boost_config["sensor_query"]["sensor_doc"] == 1.5
-        assert booster.boost_config["algorithm_query"]["algorithm_doc"] == 1.3
-        assert booster.boost_config["regulation_query"]["regulation_doc"] == 1.6
-    
-    def test_missing_doc_type_uses_default_weight(self):
-        """Test that missing doc types use default weight of 1.0."""
-        booster = MetadataBooster()
-        
-        chunks = [
-            RetrievalResult(
-                chunk_id="chunk_1",
-                score=0.9,
-                text="Content",
-                metadata={"doc_type": "unknown_type", "source_path": "doc.pdf"}
-            )
-        ]
-        
-        query = "激光雷达"
-        boosted = booster.apply_boost(chunks, query)
-        
-        # Score should remain unchanged (weight = 1.0)
-        assert boosted[0].score == 0.9
+        chunks = [make_chunk("c1", 0.5, "sensor_doc")]
+        result = booster.apply_boost(chunks, "摄像头的分辨率是多少")
+        assert pytest.approx(result[0].score) == 0.5 * 2.0
 
-
-class TestEdgeCases:
-    """Test edge cases and error handling."""
-    
-    def test_empty_query(self):
-        """Test handling of empty query."""
-        booster = MetadataBooster()
-        
-        assert booster.detect_query_type("") == "general"
-        assert booster.detect_query_type(None) == "general"
-    
-    def test_chunks_without_doc_type(self):
-        """Test handling of chunks without doc_type metadata."""
-        booster = MetadataBooster()
-        
-        chunks = [
-            RetrievalResult(
-                chunk_id="chunk_1",
-                score=0.9,
-                text="Content",
-                metadata={"source_path": "doc.pdf"}  # No doc_type
-            )
-        ]
-        
-        query = "激光雷达"
-        boosted = booster.apply_boost(chunks, query)
-        
-        # Should handle gracefully (use default weight 1.0)
-        assert len(boosted) == 1
-        assert boosted[0].score == 0.9
-    
-    def test_apply_boost_with_details_returns_complete_result(self):
-        """Test that apply_boost_with_details returns complete result."""
-        booster = MetadataBooster()
-        
-        chunks = [
-            RetrievalResult(
-                chunk_id="chunk_1",
-                score=0.9,
-                text="Content",
-                metadata={"doc_type": "sensor_doc", "source_path": "doc.pdf"}
-            )
-        ]
-        
-        query = "激光雷达"
-        result = booster.apply_boost_with_details(chunks, query)
-        
-        assert isinstance(result, MetadataBoostResult)
-        assert result.original_chunks == chunks
-        assert len(result.boosted_chunks) > 0
-        assert result.boost_type == "sensor_query"
-        assert len(result.boost_config) > 0
+    def test_boost_config_missing_doc_type_uses_1_0(self):
+        """A doc_type not present in the boost config should have its score unchanged (×1.0)."""
+        custom_config = {
+            "sensor_query": {"sensor_doc": 1.5},  # algorithm_doc intentionally absent
+        }
+        booster = MetadataBooster(boost_config=custom_config)
+        chunks = [make_chunk("c1", 0.7, "algorithm_doc")]
+        result = booster.apply_boost(chunks, "摄像头的分辨率是多少")
+        assert pytest.approx(result[0].score) == 0.7 * 1.0

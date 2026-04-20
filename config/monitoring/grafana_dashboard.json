@@ -1,0 +1,320 @@
+{
+  "dashboard": {
+    "title": "AD Knowledge Retrieval System",
+    "tags": ["autonomous-driving", "knowledge-retrieval", "rag"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Query Throughput",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(query_requests_total[5m])",
+            "legendFormat": "Queries/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Queries/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Response Time (p50, p95, p99)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(query_response_time_seconds_bucket[5m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(query_response_time_seconds_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(query_response_time_seconds_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Response Time"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [6], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["B", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "name": "High Response Time Alert",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(query_errors_total[5m]) / rate(query_requests_total[5m]) * 100",
+            "legendFormat": "Error Rate %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Error Rate"},
+          {"format": "short"}
+        ],
+        "thresholds": [
+          {"value": 5, "colorMode": "critical", "op": "gt", "fill": true, "line": true}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Citation Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(queries_with_citations_total[10m]) / rate(query_requests_total[10m]) * 100",
+            "legendFormat": "Citation Rate %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Citation Rate", "min": 0, "max": 100},
+          {"format": "short"}
+        ],
+        "thresholds": [
+          {"value": 80, "colorMode": "custom", "op": "lt", "fill": false, "line": true, "lineColor": "green"},
+          {"value": 70, "colorMode": "critical", "op": "lt", "fill": true, "line": true}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Query Type Distribution",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (query_type) (rate(query_requests_total[10m]))",
+            "legendFormat": "{{query_type}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Boundary Refusal Rate",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(boundary_refusals_total[10m]) / rate(query_requests_total[10m]) * 100",
+            "legendFormat": "Refusal Rate %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Refusal Rate"},
+          {"format": "short"}
+        ],
+        "thresholds": [
+          {"value": 30, "colorMode": "critical", "op": "gt", "fill": true, "line": true}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Document Diversity Score",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "avg_over_time(document_diversity_score[10m])",
+            "legendFormat": "Diversity Score",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Diversity Score", "min": 0, "max": 1},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Retrieval Time Breakdown",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(retrieval_time_seconds_bucket[5m]))",
+            "legendFormat": "Retrieval (p95)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(reranking_time_seconds_bucket[5m]))",
+            "legendFormat": "Reranking (p95)",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(generation_time_seconds_bucket[5m]))",
+            "legendFormat": "Generation (p95)",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Time"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Metadata Boost Application Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(boost_applied_total[10m]) / rate(boost_eligible_queries_total[10m]) * 100",
+            "legendFormat": "Boost Application Rate %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Application Rate"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 10,
+        "title": "System CPU Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 32, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU Usage %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "CPU Usage", "min": 0, "max": 100},
+          {"format": "short"}
+        ],
+        "thresholds": [
+          {"value": 80, "colorMode": "critical", "op": "gt", "fill": true, "line": true}
+        ]
+      },
+      {
+        "id": 11,
+        "title": "System Memory Usage",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 32, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "legendFormat": "Memory Usage %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Memory Usage", "min": 0, "max": 100},
+          {"format": "short"}
+        ],
+        "thresholds": [
+          {"value": 80, "colorMode": "critical", "op": "gt", "fill": true, "line": true}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Disk Space Usage",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 32, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "(1 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})) * 100",
+            "legendFormat": "Disk Usage %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Disk Usage", "min": 0, "max": 100},
+          {"format": "short"}
+        ],
+        "thresholds": [
+          {"value": 80, "colorMode": "critical", "op": "gt", "fill": true, "line": true}
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Top Queries (Last Hour)",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 40, "w": 24, "h": 8},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (query_text) (increase(query_requests_total[1h])))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {},
+              "renameByName": {
+                "query_text": "Query",
+                "Value": "Count"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "Refusal Reasons Distribution",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 48, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (refusal_type) (rate(boundary_refusals_total[1h]))",
+            "legendFormat": "{{refusal_type}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "Document Type Distribution in Results",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 48, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (document_type) (rate(retrieved_documents_total[1h]))",
+            "legendFormat": "{{document_type}}",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,130 @@
+---
+document_type: algorithm_doc
+algorithm_type: control
+algorithm_category: lateral_control
+model: MPC_Controller
+version: 1.0
+---
+
+# MPC (模型预测控制) 横向控制算法
+
+## 算法概述
+
+MPC 是一种基于优化的控制算法，通过预测未来状态并优化控制输入，实现精确的轨迹跟踪。
+
+## 核心原理
+
+### 预测模型
+- **车辆模型**: Bicycle Model
+- **状态**: [x, y, ψ, v, cte, eψ]
+- **控制输入**: [δ, a]
+- **预测时域**: T = 1-2 秒
+
+### 优化问题
+```
+min Σ(w1*cte² + w2*eψ² + w3*δ² + w4*Δδ²)
+s.t. 
+    x_{k+1} = f(x_k, u_k)
+    |δ| ≤ δ_max
+    |Δδ| ≤ Δδ_max
+```
+
+- **cte**: 横向误差
+- **eψ**: 航向误差
+- **δ**: 转向角
+- **Δδ**: 转向角变化率
+
+## 算法流程
+
+1. **状态估计**: 获取当前车辆状态
+2. **参考轨迹**: 提取预测时域内的参考点
+3. **优化求解**: 使用 IPOPT 求解 QP 问题
+4. **执行控制**: 应用第一个控制输入
+5. **滚动优化**: 下一时刻重复
+
+## 参数配置
+
+```yaml
+# 预测参数
+N: 20  # 预测步数
+dt: 0.05  # 时间步长 (50ms)
+
+# 权重
+w_cte: 2000
+w_epsi: 2000
+w_v: 1
+w_delta: 5
+w_a: 5
+w_ddelta: 200
+w_da: 10
+
+# 约束
+max_steer: 25  # degree
+max_steer_rate: 30  # degree/s
+max_accel: 3  # m/s²
+max_decel: -5  # m/s²
+```
+
+## 性能指标
+
+- **控制频率**: 20 Hz
+- **计算时间**: < 50 ms
+- **横向误差**: < 0.1 m (稳态)
+- **航向误差**: < 2° (稳态)
+
+## 代码示例
+
+```python
+import casadi as ca
+
+class MPCController:
+    def __init__(self, N=20, dt=0.05):
+        self.N = N
+        self.dt = dt
+        self.setup_optimizer()
+    
+    def solve(self, state, ref_traj):
+        # 设置初始状态
+        self.opti.set_value(self.x0, state)
+        
+        # 设置参考轨迹
+        for k in range(self.N):
+            self.opti.set_value(self.ref[k], ref_traj[k])
+        
+        # 求解
+        sol = self.opti.solve()
+        
+        # 提取控制输入
+        delta = sol.value(self.delta[0])
+        a = sol.value(self.a[0])
+        
+        return delta, a
+```
+
+## 优势与局限
+
+### 优势
+- 考虑未来状态，预见性强
+- 可处理多约束
+- 控制精度高
+
+### 局限
+- 计算量大
+- 依赖准确模型
+- 参数调优复杂
+
+## 应用场景
+
+- **高速公路**: 车道保持、变道
+- **城市道路**: 弯道跟踪
+- **泊车**: 精确轨迹跟踪
+
+## 参考资料
+
+- **论文**: Model Predictive Control for Autonomous Driving
+- **代码**: https://github.com/ApolloAuto/apollo (Control Module)
+
+---
+
+**文档版本**: 1.0  
+**发布日期**: 2024-01-15

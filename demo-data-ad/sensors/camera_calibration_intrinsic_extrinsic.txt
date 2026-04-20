@@ -1,0 +1,402 @@
+---
+document_type: sensor_doc
+sensor_type: camera
+content_type: calibration
+application: camera_calibration
+version: 1.0
+---
+
+# 车载摄像头内外参标定指南
+
+## 概述
+
+本文档详细描述车载摄像头的内参和外参标定方法，适用于前视、环视、后视等各类车载摄像头。
+
+## 内参标定
+
+### 相机模型
+
+**针孔相机模型**
+```
+[u]   [fx  0  cx]   [X]
+[v] = [0  fy  cy] * [Y]
+[1]   [0   0   1]   [Z]
+```
+
+参数说明：
+- fx, fy: 焦距（像素单位）
+- cx, cy: 主点坐标
+- (u, v): 图像坐标
+- (X, Y, Z): 相机坐标
+
+**畸变模型**
+
+径向畸变：
+```
+x_distorted = x * (1 + k1*r² + k2*r⁴ + k3*r⁶)
+y_distorted = y * (1 + k1*r² + k2*r⁴ + k3*r⁶)
+```
+
+切向畸变：
+```
+x_distorted = x + [2*p1*x*y + p2*(r² + 2*x²)]
+y_distorted = y + [p1*(r² + 2*y²) + 2*p2*x*y]
+```
+
+参数说明：
+- k1, k2, k3: 径向畸变系数
+- p1, p2: 切向畸变系数
+- r² = x² + y²
+
+### 标定方法
+
+**方法 1: 棋盘格标定**（推荐）
+
+工具：
+- 棋盘格标定板（8x6 或 9x7）
+- 格子尺寸：30-50 mm
+- 打印在平整硬板上
+
+步骤：
+1. 准备标定板，确保平整无变形
+2. 在不同位置和角度拍摄 20-30 张图像
+3. 覆盖图像的各个区域
+4. 使用 OpenCV 或 MATLAB 标定工具箱
+5. 检测角点并计算内参
+
+代码示例（Python + OpenCV）：
+```python
+import cv2
+import numpy as np
+
+# 棋盘格尺寸
+pattern_size = (9, 7)
+square_size = 30  # mm
+
+# 准备物体点
+objp = np.zeros((pattern_size[0]*pattern_size[1], 3), np.float32)
+objp[:,:2] = np.mgrid[0:pattern_size[0], 0:pattern_size[1]].T.reshape(-1,2)
+objp *= square_size
+
+# 存储点
+objpoints = []  # 3D 点
+imgpoints = []  # 2D 点
+
+# 读取图像
+images = glob.glob('calib_images/*.jpg')
+
+for fname in images:
+    img = cv2.imread(fname)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # 查找棋盘格角点
+    ret, corners = cv2.findChessboardCorners(gray, pattern_size, None)
+    
+    if ret:
+        objpoints.append(objp)
+        
+        # 亚像素精度
+        corners2 = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), criteria)
+        imgpoints.append(corners2)
+
+# 标定
+ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+    objpoints, imgpoints, gray.shape[::-1], None, None
+)
+
+print("Camera matrix:\n", mtx)
+print("Distortion coefficients:\n", dist)
+```
+
+**方法 2: 圆形标定板**
+
+优点：
+- 检测更鲁棒
+- 适合低分辨率相机
+- 对光照不敏感
+
+缺点：
+- 精度略低于棋盘格
+- 需要非对称圆形图案
+
+**方法 3: AprilTag 标定**
+
+优点：
+- 单张图像即可标定
+- 支持部分遮挡
+- 可编码 ID 信息
+
+缺点：
+- 需要多个 AprilTag
+- 精度取决于 Tag 尺寸
+
+### 标定质量评估
+
+**重投影误差**
+```
+error = sqrt(Σ(u_measured - u_projected)² + (v_measured - v_projected)²) / N
+```
+
+质量标准：
+- 优秀：< 0.3 pixel
+- 良好：0.3 - 0.5 pixel
+- 可接受：0.5 - 1.0 pixel
+- 不合格：> 1.0 pixel
+
+**畸变可视化**
+- 绘制畸变网格
+- 检查边缘区域畸变
+- 验证去畸变效果
+
+## 外参标定
+
+### 坐标系定义
+
+**车辆坐标系**
+- 原点：后轴中心地面投影
+- X 轴：前向
+- Y 轴：左向
+- Z 轴：上向
+
+**相机坐标系**
+- 原点：光学中心
+- X 轴：右向
+- Y 轴：下向
+- Z 轴：前向（光轴方向）
+
+### 外参矩阵
+
+**旋转矩阵 R (3x3)**
+```
+R = Rz(yaw) * Ry(pitch) * Rx(roll)
+```
+
+**平移向量 t (3x1)**
+```
+t = [tx, ty, tz]^T
+```
+
+**变换矩阵 T (4x4)**
+```
+T = [R  t]
+    [0  1]
+```
+
+### 标定方法
+
+**方法 1: 标定板法**
+
+步骤：
+1. 在车辆前方地面放置标定板
+2. 标定板与车辆坐标系对齐
+3. 拍摄标定板图像
+4. 使用 PnP 算法求解外参
+5. 多次测量取平均值
+
+代码示例：
+```python
+# 已知标定板在车辆坐标系中的 3D 点
+object_points_vehicle = np.array([
+    [2.0, -0.5, 0.0],  # 左前角
+    [2.0,  0.5, 0.0],  # 右前角
+    [3.0, -0.5, 0.0],  # 左后角
+    [3.0,  0.5, 0.0],  # 右后角
+], dtype=np.float32)
+
+# 图像中检测到的 2D 点
+image_points = np.array([
+    [320, 400],
+    [960, 400],
+    [280, 600],
+    [1000, 600],
+], dtype=np.float32)
+
+# 求解 PnP
+success, rvec, tvec = cv2.solvePnP(
+    object_points_vehicle,
+    image_points,
+    camera_matrix,
+    dist_coeffs
+)
+
+# 转换为旋转矩阵
+R, _ = cv2.Rodrigues(rvec)
+
+print("Rotation matrix:\n", R)
+print("Translation vector:\n", tvec)
+```
+
+**方法 2: 车道线法**
+
+步骤：
+1. 车辆行驶在标准车道上
+2. 检测图像中的车道线
+3. 利用车道线宽度（3.75 m）作为约束
+4. 优化求解外参
+
+适用场景：
+- 快速标定
+- 现场标定
+- 无标定板情况
+
+精度：中等（< 5 cm, < 1°）
+
+**方法 3: 多相机联合标定**
+
+步骤：
+1. 同时标定多个相机的内参
+2. 使用共同视野中的特征点
+3. 建立相机间的相对位姿
+4. 求解所有相机的外参
+
+优点：
+- 一次性标定多个相机
+- 相机间约束提高精度
+- 适合环视系统
+
+### 安装要求
+
+**前视相机**
+- 位置：前挡风玻璃内侧，后视镜后方
+- 高度：1.2 - 1.5 m
+- 俯仰角：1° - 3° (向下)
+- 视场角：50° - 60° (水平)
+
+**环视相机**
+- 前视：前保险杠，俯仰角 30° - 45°
+- 后视：后保险杠，俯仰角 30° - 45°
+- 左右：后视镜下方，俯仰角 45° - 60°
+
+**后视相机**
+- 位置：后牌照上方
+- 高度：0.8 - 1.2 m
+- 俯仰角：10° - 20° (向下)
+- 视场角：120° - 140° (水平)
+
+## 标定流程
+
+### 1. 准备阶段
+- [ ] 检查相机安装牢固
+- [ ] 清洁镜头
+- [ ] 准备标定板
+- [ ] 选择标定场地（光照均匀）
+
+### 2. 内参标定
+- [ ] 拍摄 20-30 张标定图像
+- [ ] 覆盖图像各个区域
+- [ ] 运行标定程序
+- [ ] 检查重投影误差
+- [ ] 保存内参文件
+
+### 3. 外参标定
+- [ ] 放置标定板
+- [ ] 测量标定板位置
+- [ ] 拍摄标定图像
+- [ ] 运行 PnP 求解
+- [ ] 验证标定结果
+- [ ] 保存外参文件
+
+### 4. 验证测试
+- [ ] 实际场景测试
+- [ ] 检查去畸变效果
+- [ ] 验证 3D 重建精度
+- [ ] 记录标定参数
+
+## 标定工具
+
+### 开源工具
+- **OpenCV**: cv2.calibrateCamera()
+- **MATLAB Camera Calibrator**: 图形化界面
+- **Kalibr**: ROS-based, 支持多相机
+- **CamOdoCal**: 相机-里程计标定
+
+### 商业工具
+- **Mobileye Calibration Tool**
+- **Continental Camera Calibration**
+- **Bosch Camera Calibration Suite**
+
+## 标定精度要求
+
+### L2/L2+ 级别
+- 内参精度：< 0.5 pixel
+- 外参位置：< 10 cm
+- 外参角度：< 1°
+
+### L3/L4 级别
+- 内参精度：< 0.3 pixel
+- 外参位置：< 5 cm
+- 外参角度：< 0.5°
+
+## 常见问题
+
+### Q1: 重投影误差过大？
+**原因**：
+- 标定板不平整
+- 图像模糊
+- 角点检测不准确
+
+**解决**：
+- 使用高质量标定板
+- 确保图像清晰
+- 增加标定图像数量
+
+### Q2: 畸变校正后图像变形？
+**原因**：
+- 畸变系数过大
+- 标定数据不足
+- 相机模型不匹配
+
+**解决**：
+- 检查标定质量
+- 增加边缘区域图像
+- 尝试不同畸变模型
+
+### Q3: 外参标定不稳定？
+**原因**：
+- 标定板位置测量不准
+- PnP 求解不收敛
+- 特征点数量不足
+
+**解决**：
+- 精确测量标定板位置
+- 增加特征点数量
+- 使用 RANSAC 提高鲁棒性
+
+## 最佳实践
+
+### 标定环境
+- 室内或阴天（避免强光）
+- 均匀照明
+- 无反光表面
+- 温度 15-25°C
+
+### 标定数据
+- 至少 20 张图像
+- 覆盖全视场
+- 不同距离和角度
+- 避免运动模糊
+
+### 标定验证
+- 使用独立测试数据
+- 多场景验证
+- 长期稳定性测试
+
+## 参考资料
+
+### 论文
+- Zhang, Z. "A flexible new technique for camera calibration"
+- Scaramuzza, D. "Omnidirectional Camera Calibration"
+
+### 标准
+- ISO 19206-4: Road vehicles — Test devices for target vehicles
+
+### 开源项目
+- https://github.com/opencv/opencv
+- https://github.com/ethz-asl/kalibr
+- https://github.com/hengli/camodocal
+
+---
+
+**文档版本**: 1.0  
+**发布日期**: 2024-01-15  
+**作者**: 视觉感知团队

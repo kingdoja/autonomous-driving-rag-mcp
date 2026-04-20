@@ -1,0 +1,118 @@
+---
+document_type: algorithm_doc
+algorithm_type: control
+algorithm_category: longitudinal_control
+model: PID_Controller
+version: 1.0
+---
+
+# PID 纵向控制算法
+
+## 算法概述
+
+PID (比例-积分-微分) 控制器是经典的反馈控制算法，用于自动驾驶车辆的速度控制和跟车控制。
+
+## 控制原理
+
+### PID 公式
+```
+u(t) = Kp*e(t) + Ki*∫e(t)dt + Kd*de(t)/dt
+```
+
+- **Kp**: 比例增益，响应当前误差
+- **Ki**: 积分增益，消除稳态误差
+- **Kd**: 微分增益，抑制振荡
+
+### 离散化
+```
+u[k] = Kp*e[k] + Ki*Σe[k] + Kd*(e[k]-e[k-1])/dt
+```
+
+## 参数整定
+
+### Ziegler-Nichols 方法
+1. 设置 Ki=0, Kd=0
+2. 增大 Kp 直到系统振荡
+3. 记录临界增益 Ku 和振荡周期 Tu
+4. 计算: Kp=0.6*Ku, Ki=2*Kp/Tu, Kd=Kp*Tu/8
+
+### 经验参数
+```yaml
+# 速度控制
+Kp: 0.5
+Ki: 0.1
+Kd: 0.05
+
+# 跟车控制
+Kp: 0.3
+Ki: 0.05
+Kd: 0.1
+```
+
+## 实现细节
+
+### 积分饱和
+```python
+integral = np.clip(integral + error*dt, -integral_max, integral_max)
+```
+
+### 微分滤波
+```python
+derivative = alpha*derivative + (1-alpha)*(error-prev_error)/dt
+```
+
+### 输出限幅
+```python
+output = np.clip(output, -accel_max, accel_max)
+```
+
+## 代码示例
+
+```python
+class PIDController:
+    def __init__(self, Kp, Ki, Kd):
+        self.Kp = Kp
+        self.Ki = Ki
+        self.Kd = Kd
+        self.integral = 0
+        self.prev_error = 0
+    
+    def update(self, error, dt):
+        # 比例项
+        P = self.Kp * error
+        
+        # 积分项
+        self.integral += error * dt
+        I = self.Ki * self.integral
+        
+        # 微分项
+        D = self.Kd * (error - self.prev_error) / dt
+        self.prev_error = error
+        
+        # 输出
+        output = P + I + D
+        return np.clip(output, -3, 3)  # 限制加速度
+```
+
+## 性能指标
+
+- **响应时间**: < 2 秒
+- **超调量**: < 10%
+- **稳态误差**: < 0.5 m/s
+- **控制频率**: 50 Hz
+
+## 应用场景
+
+- **定速巡航**: 保持设定速度
+- **自适应巡航**: 跟随前车
+- **停车控制**: 精确停止
+
+## 参考资料
+
+- **书籍**: Modern Control Engineering (Ogata)
+- **代码**: Autoware Pure Pursuit + PID
+
+---
+
+**文档版本**: 1.0  
+**发布日期**: 2024-01-15

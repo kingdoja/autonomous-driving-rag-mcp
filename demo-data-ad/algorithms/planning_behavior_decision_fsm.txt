@@ -1,0 +1,131 @@
+---
+document_type: algorithm_doc
+algorithm_type: planning
+algorithm_category: behavior_decision
+model: FSM_Behavior_Planner
+version: 1.0
+---
+
+# FSM 行为决策算法
+
+## 算法概述
+
+基于有限状态机 (FSM) 的行为决策算法，通过状态转换实现自动驾驶车辆的高层决策。
+
+## 状态定义
+
+### 主要状态
+1. **CRUISE**: 巡航
+2. **FOLLOW**: 跟车
+3. **OVERTAKE**: 超车
+4. **LANE_CHANGE_LEFT**: 左变道
+5. **LANE_CHANGE_RIGHT**: 右变道
+6. **STOP**: 停车
+7. **EMERGENCY_STOP**: 紧急停车
+
+## 状态转换
+
+### 转换条件
+```
+CRUISE → FOLLOW: 前方有车 && 距离 < safe_distance
+FOLLOW → OVERTAKE: 可超车 && 左车道空闲
+OVERTAKE → CRUISE: 超车完成
+CRUISE → LANE_CHANGE_LEFT: 需要左转 || 左车道更优
+ANY → EMERGENCY_STOP: 紧急情况
+```
+
+### 优先级
+```
+EMERGENCY_STOP > STOP > LANE_CHANGE > OVERTAKE > FOLLOW > CRUISE
+```
+
+## 决策逻辑
+
+### 跟车决策
+```python
+if front_vehicle_detected:
+    distance = get_distance(front_vehicle)
+    if distance < safe_distance:
+        return FOLLOW
+    else:
+        return CRUISE
+```
+
+### 变道决策
+```python
+if lane_change_needed:
+    if target_lane_safe and gap_sufficient:
+        return LANE_CHANGE_LEFT/RIGHT
+    else:
+        return FOLLOW
+```
+
+### 超车决策
+```python
+if front_vehicle_slow and overtake_allowed:
+    if left_lane_clear and oncoming_safe:
+        return OVERTAKE
+    else:
+        return FOLLOW
+```
+
+## 参数配置
+
+```yaml
+# 安全距离
+safe_distance_cruise: 50  # m
+safe_distance_follow: 30  # m
+safe_distance_lane_change: 40  # m
+
+# 速度阈值
+min_overtake_speed_diff: 5  # m/s
+max_follow_speed: 25  # m/s
+
+# 时间阈值
+lane_change_duration: 3  # s
+overtake_duration: 5  # s
+```
+
+## 代码示例
+
+```python
+class FSMBehaviorPlanner:
+    def __init__(self):
+        self.state = State.CRUISE
+    
+    def update(self, perception, prediction):
+        # 状态转换逻辑
+        if self.state == State.CRUISE:
+            if self.has_front_vehicle(perception):
+                self.state = State.FOLLOW
+        
+        elif self.state == State.FOLLOW:
+            if self.can_overtake(perception, prediction):
+                self.state = State.OVERTAKE
+        
+        # 返回行为指令
+        return self.get_behavior_command()
+```
+
+## 性能指标
+
+- **决策频率**: 10 Hz
+- **响应时间**: < 100 ms
+- **安全性**: 无碰撞
+- **舒适性**: 加速度 < 2 m/s²
+
+## 应用场景
+
+- **高速公路**: 巡航、跟车、变道
+- **城市道路**: 交叉路口、红绿灯
+- **泊车**: 寻找车位、泊车
+
+## 参考资料
+
+- **论文**: Behavior Planning for Autonomous Driving
+- **代码**: Apollo Planning Module
+
+---
+
+**文档版本**: 1.0  
+**发布日期**: 2024-01-15

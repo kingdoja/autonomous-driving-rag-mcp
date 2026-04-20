@@ -1,0 +1,76 @@
+---
+document_type: algorithm_doc
+algorithm_type: perception
+algorithm_category: lane_detection
+model: Ultra-Fast-Lane-Detection
+version: 1.0
+---
+
+# Ultra-Fast Lane Detection (UFLD) 车道线检测算法
+
+## 算法概述
+
+UFLD 是一种基于行锚点的快速车道线检测算法，将车道线检测转化为行分类问题，实现了 300+ FPS 的实时性能。
+
+## 核心思想
+
+### 行锚点机制
+- 将图像划分为 N 行（如 56 行）
+- 每行预测车道线的列位置
+- 输出: (N_rows × N_lanes × N_cols) 分类概率
+
+### 网络架构
+- **Backbone**: ResNet-18/34
+- **Neck**: FPN
+- **Head**: 行分类头
+- **参数量**: 10M (ResNet-18)
+
+## 性能指标
+
+- **精度**: 95.8% (CULane)
+- **速度**: 322 FPS (1080Ti)
+- **延迟**: 3.1 ms
+- **适用场景**: 高速公路、城市道路
+
+## 训练配置
+
+```yaml
+dataset: CULane
+epochs: 100
+batch_size: 32
+img_size: [288, 800]
+optimizer: Adam
+lr: 0.0001
+```
+
+## 部署优化
+
+- **TensorRT**: FP16, 500+ FPS
+- **ONNX**: 跨平台部署
+- **移动端**: NCNN, 60 FPS (骁龙 865)
+
+## 代码示例
+
+```python
+import torch
+from model import UFLD
+
+model = UFLD(num_lanes=4, num_rows=56)
+model.load_state_dict(torch.load('ufld.pth'))
+model.eval()
+
+# 推理
+with torch.no_grad():
+    output = model(image)
+    lanes = decode_lanes(output)
+```
+
+## 参考资料
+
+- **论文**: Ultra Fast Structure-aware Deep Lane Detection
+- **代码**: https://github.com/cfzd/Ultra-Fast-Lane-Detection
+
+---
+
+**文档版本**: 1.0  
+**发布日期**: 2024-01-15

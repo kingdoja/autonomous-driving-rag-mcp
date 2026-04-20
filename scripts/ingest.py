@@ -126,13 +126,13 @@ def discover_files(path: str, extensions: List[str] = None) -> List[Path]:
     
     Args:
         path: File or directory path
-        extensions: List of file extensions to include (default: ['.pdf'])
+        extensions: List of file extensions to include (default: ['.pdf', '.txt'])
     
     Returns:
         List of file paths to process
     """
     if extensions is None:
-        extensions = ['.pdf']
+        extensions = ['.pdf', '.txt']
     
     path = Path(path)
     

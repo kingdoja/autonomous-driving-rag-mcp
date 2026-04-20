@@ -1174,13 +1174,440 @@ class ResponseBuilder:
             Chinese translation
         """
         translations = {
+            # Medical domain
             "guideline": "指南",
             "sop": "SOP",
             "manual": "说明书",
             "training": "培训材料",
             "unknown": "其他",
+            # Autonomous driving domain
+            "sensor_doc": "传感器文档",
+            "algorithm_doc": "算法文档",
+            "regulation_doc": "法规文档",
+            "test_doc": "测试文档",
         }
         return translations.get(doc_type, doc_type)
+
+    # -------------------------------------------------------------------------
+    # Autonomous Driving specific response builders
+    # -------------------------------------------------------------------------
+
+    def build_sensor_comparison_response(
+        self,
+        query: str,
+        sensor_groups: Dict[str, List[RetrievalResult]],
+        citations: Optional[List[EnhancedCitation]] = None,
+        collection: Optional[str] = None,
+    ) -> MCPToolResponse:
+        """Build a structured sensor comparison response.
+
+        Retrieves content from at least 2 sensor documents and formats a
+        side-by-side comparison with technical parameters, pros/cons, and
+        full citations.
+
+        Args:
+            query: User query (e.g. "激光雷达 vs 毫米波雷达")
+            sensor_groups: Chunks grouped by sensor document name
+            citations: Pre-ranked EnhancedCitation list (generated if None)
+            collection: Collection name (optional)
+
+        Returns:
+            MCPToolResponse with structured sensor comparison content
+
+        Example:
+            >>> groups = {
+            ...     "lidar_spec.pdf": [chunk1, chunk2],
+            ...     "radar_spec.pdf": [chunk3],
+            ... }
+            >>> response = builder.build_sensor_comparison_response(
+            ...     query="激光雷达 vs 毫米波雷达",
+            ...     sensor_groups=groups,
+            ... )
+        """
+        all_chunks: List[RetrievalResult] = []
+        for chunks in sensor_groups.values():
+            all_chunks.extend(chunks)
+
+        if not all_chunks:
+            return self._build_empty_response(query, collection)
+
+        # Generate or use provided citations
+        if citations is None:
+            enhanced = [self.citation_enhancer.enhance_citation(c) for c in all_chunks]
+            citations = self.citation_enhancer.rank_citations(enhanced)
+
+        content = self._build_sensor_comparison_content(query, sensor_groups, citations)
+        standard_citations = self._convert_to_standard_citations(citations)
+
+        metadata = self._build_metadata(query, collection, len(all_chunks))
+        metadata.update({
+            "response_type": "sensor_comparison",
+            "document_count": len(sensor_groups),
+            "multi_document": True,
+            "ad_domain": True,
+        })
+
+        return MCPToolResponse(
+            content=content,
+            citations=standard_citations,
+            metadata=metadata,
+            is_empty=False,
+            image_contents=[],
+        )
+
+    def build_algorithm_comparison_response(
+        self,
+        query: str,
+        algorithm_groups: Dict[str, List[RetrievalResult]],
+        citations: Optional[List[EnhancedCitation]] = None,
+        collection: Optional[str] = None,
+    ) -> MCPToolResponse:
+        """Build a structured algorithm comparison response.
+
+        Retrieves content from at least 2 algorithm documents and formats a
+        comparison listing principles, applicable scenarios, and pros/cons.
+
+        Args:
+            query: User query (e.g. "基于规则 vs 基于学习的规划算法")
+            algorithm_groups: Chunks grouped by algorithm document name
+            citations: Pre-ranked EnhancedCitation list (generated if None)
+            collection: Collection name (optional)
+
+        Returns:
+            MCPToolResponse with structured algorithm comparison content
+        """
+        all_chunks: List[RetrievalResult] = []
+        for chunks in algorithm_groups.values():
+            all_chunks.extend(chunks)
+
+        if not all_chunks:
+            return self._build_empty_response(query, collection)
+
+        if citations is None:
+            enhanced = [self.citation_enhancer.enhance_citation(c) for c in all_chunks]
+            citations = self.citation_enhancer.rank_citations(enhanced)
+
+        content = self._build_algorithm_comparison_content(query, algorithm_groups, citations)
+        standard_citations = self._convert_to_standard_citations(citations)
+
+        metadata = self._build_metadata(query, collection, len(all_chunks))
+        metadata.update({
+            "response_type": "algorithm_comparison",
+            "document_count": len(algorithm_groups),
+            "multi_document": True,
+            "ad_domain": True,
+        })
+
+        return MCPToolResponse(
+            content=content,
+            citations=standard_citations,
+            metadata=metadata,
+            is_empty=False,
+            image_contents=[],
+        )
+
+    def build_multi_sensor_fusion_response(
+        self,
+        query: str,
+        sensor_groups: Dict[str, List[RetrievalResult]],
+        citations: Optional[List[EnhancedCitation]] = None,
+        collection: Optional[str] = None,
+    ) -> MCPToolResponse:
+        """Build a multi-sensor fusion aggregation response.
+
+        Aggregates information from 3-5 sensor documents and presents a
+        complete fusion scheme with per-sensor roles and full citations.
+
+        Args:
+            query: User query (e.g. "多传感器融合方案")
+            sensor_groups: Chunks grouped by sensor document name (ideally 3-5)
+            citations: Pre-ranked EnhancedCitation list (generated if None)
+            collection: Collection name (optional)
+
+        Returns:
+            MCPToolResponse with multi-sensor fusion aggregation content
+        """
+        all_chunks: List[RetrievalResult] = []
+        for chunks in sensor_groups.values():
+            all_chunks.extend(chunks)
+
+        if not all_chunks:
+            return self._build_empty_response(query, collection)
+
+        if citations is None:
+            enhanced = [self.citation_enhancer.enhance_citation(c) for c in all_chunks]
+            citations = self.citation_enhancer.rank_citations(enhanced)
+
+        content = self._build_multi_sensor_fusion_content(query, sensor_groups, citations)
+        standard_citations = self._convert_to_standard_citations(citations)
+
+        metadata = self._build_metadata(query, collection, len(all_chunks))
+        metadata.update({
+            "response_type": "multi_sensor_fusion",
+            "document_count": len(sensor_groups),
+            "multi_document": True,
+            "ad_domain": True,
+        })
+
+        return MCPToolResponse(
+            content=content,
+            citations=standard_citations,
+            metadata=metadata,
+            is_empty=False,
+            image_contents=[],
+        )
+
+    # -------------------------------------------------------------------------
+    # AD-specific content builders (private helpers)
+    # -------------------------------------------------------------------------
+
+    def _build_sensor_comparison_content(
+        self,
+        query: str,
+        sensor_groups: Dict[str, List[RetrievalResult]],
+        citations: List[EnhancedCitation],
+    ) -> str:
+        """Build sensor comparison content following the AD sensor comparison template.
+
+        Args:
+            query: User query
+            sensor_groups: Chunks grouped by sensor document
+            citations: Ranked enhanced citations
+
+        Returns:
+            Formatted sensor comparison markdown string
+        """
+        lines = [
+            "## 传感器方案对比",
+            "",
+            f"针对查询 **\"{query}\"**，以下是不同传感器的对比：",
+            "",
+        ]
+
+        # Sort documents by total relevance score (descending)
+        doc_order = sorted(
+            sensor_groups.keys(),
+            key=lambda d: sum(c.score for c in sensor_groups[d]),
+            reverse=True,
+        )
+
+        for idx, doc_name in enumerate(doc_order, 1):
+            chunks = sensor_groups[doc_name]
+            if not chunks:
+                continue
+
+            # Find citations for this document
+            doc_citations = [c for c in citations if c.document_name == doc_name]
+            citation_markers = self._format_citation_markers(doc_citations, citations)
+
+            lines.append(f"### {idx}. {doc_name} {citation_markers}")
+            lines.append("")
+
+            # Technical parameters section from top chunk
+            top_chunk = chunks[0]
+            excerpt = self._truncate_text(top_chunk.text, 250)
+            lines.append(f"**技术参数:**")
+            lines.append(f"> {excerpt}")
+            lines.append("")
+
+            # Additional chunks as supplementary info
+            if len(chunks) > 1:
+                for extra_chunk in chunks[1:3]:  # at most 2 extra
+                    extra_excerpt = self._truncate_text(extra_chunk.text, 150)
+                    lines.append(f"> {extra_excerpt}")
+                    lines.append("")
+
+            # Document metadata
+            if doc_citations:
+                doc_type_cn = self._translate_doc_type(doc_citations[0].document_type)
+                lines.append(f"**文档类型:** {doc_type_cn}")
+                lines.append(f"**相关度:** {doc_citations[0].relevance_score:.2%}")
+                lines.append("")
+
+        # Comparison summary
+        lines.extend([
+            "---",
+            "",
+            "**对比总结:**",
+            "",
+            f"以上内容来自 {len(sensor_groups)} 份传感器文档，"
+            "涵盖了各传感器的技术参数和特性。"
+            "请根据具体应用场景（探测距离、精度、成本、环境适应性）选择合适的传感器方案。",
+            "",
+        ])
+
+        lines.extend(self._build_citations_section(citations))
+        return "\n".join(lines)
+
+    def _build_algorithm_comparison_content(
+        self,
+        query: str,
+        algorithm_groups: Dict[str, List[RetrievalResult]],
+        citations: List[EnhancedCitation],
+    ) -> str:
+        """Build algorithm comparison content following the AD algorithm comparison template.
+
+        Args:
+            query: User query
+            algorithm_groups: Chunks grouped by algorithm document
+            citations: Ranked enhanced citations
+
+        Returns:
+            Formatted algorithm comparison markdown string
+        """
+        lines = [
+            "## 算法方案对比",
+            "",
+            f"针对查询 **\"{query}\"**，以下是不同算法的对比：",
+            "",
+        ]
+
+        doc_order = sorted(
+            algorithm_groups.keys(),
+            key=lambda d: sum(c.score for c in algorithm_groups[d]),
+            reverse=True,
+        )
+
+        for idx, doc_name in enumerate(doc_order, 1):
+            chunks = algorithm_groups[doc_name]
+            if not chunks:
+                continue
+
+            doc_citations = [c for c in citations if c.document_name == doc_name]
+            citation_markers = self._format_citation_markers(doc_citations, citations)
+
+            lines.append(f"### {idx}. {doc_name} {citation_markers}")
+            lines.append("")
+
+            top_chunk = chunks[0]
+            excerpt = self._truncate_text(top_chunk.text, 250)
+            lines.append("**算法原理:**")
+            lines.append(f"> {excerpt}")
+            lines.append("")
+
+            if len(chunks) > 1:
+                for extra_chunk in chunks[1:3]:
+                    extra_excerpt = self._truncate_text(extra_chunk.text, 150)
+                    lines.append(f"> {extra_excerpt}")
+                    lines.append("")
+
+            if doc_citations:
+                doc_type_cn = self._translate_doc_type(doc_citations[0].document_type)
+                lines.append(f"**文档类型:** {doc_type_cn}")
+                lines.append(f"**相关度:** {doc_citations[0].relevance_score:.2%}")
+                lines.append("")
+
+        lines.extend([
+            "---",
+            "",
+            "**选型建议:**",
+            "",
+            f"以上内容来自 {len(algorithm_groups)} 份算法文档。"
+            "请根据实际场景需求（实时性、精度、计算资源、可解释性）选择合适的算法方案。",
+            "",
+        ])
+
+        lines.extend(self._build_citations_section(citations))
+        return "\n".join(lines)
+
+    def _build_multi_sensor_fusion_content(
+        self,
+        query: str,
+        sensor_groups: Dict[str, List[RetrievalResult]],
+        citations: List[EnhancedCitation],
+    ) -> str:
+        """Build multi-sensor fusion aggregation content.
+
+        Aggregates 3-5 sensor documents into a coherent fusion scheme
+        following the AD multi-sensor fusion template.
+
+        Args:
+            query: User query
+            sensor_groups: Chunks grouped by sensor document (ideally 3-5)
+            citations: Ranked enhanced citations
+
+        Returns:
+            Formatted multi-sensor fusion markdown string
+        """
+        lines = [
+            "## 多传感器融合方案",
+            "",
+            f"针对查询 **\"{query}\"**，以下是融合方案汇总：",
+            "",
+            "**融合传感器:**",
+            "",
+        ]
+
+        doc_order = sorted(
+            sensor_groups.keys(),
+            key=lambda d: sum(c.score for c in sensor_groups[d]),
+            reverse=True,
+        )
+
+        # Cap at 5 sensors for readability
+        display_docs = doc_order[:5]
+
+        for idx, doc_name in enumerate(display_docs, 1):
+            chunks = sensor_groups[doc_name]
+            if not chunks:
+                continue
+
+            doc_citations = [c for c in citations if c.document_name == doc_name]
+            citation_markers = self._format_citation_markers(doc_citations, citations)
+
+            top_chunk = chunks[0]
+            role_excerpt = self._truncate_text(top_chunk.text, 120)
+            lines.append(f"{idx}. **{doc_name}** {citation_markers}")
+            lines.append(f"   - {role_excerpt}")
+            lines.append("")
+
+        if len(doc_order) > 5:
+            remaining = len(doc_order) - 5
+            lines.append(f"*...还有 {remaining} 份传感器文档未显示*")
+            lines.append("")
+
+        lines.extend([
+            "**融合策略:**",
+            "",
+            "多传感器融合通过互补各传感器的感知优势，提升系统整体的感知鲁棒性和精度。"
+            "常见融合层次包括：数据级融合、特征级融合和决策级融合。",
+            "",
+            "**性能提升:**",
+            "",
+            f"综合 {len(display_docs)} 种传感器的信息，可有效覆盖单一传感器的盲区，"
+            "提升在复杂天气、遮挡等场景下的感知可靠性。",
+            "",
+            "---",
+            "",
+        ])
+
+        lines.extend(self._build_citations_section(citations))
+        return "\n".join(lines)
+
+    def _format_citation_markers(
+        self,
+        doc_citations: List[EnhancedCitation],
+        all_citations: List[EnhancedCitation],
+    ) -> str:
+        """Format citation index markers for a set of document citations.
+
+        Args:
+            doc_citations: Citations belonging to a specific document
+            all_citations: Full ranked citation list (used to determine indices)
+
+        Returns:
+            Formatted string like "[1][2]" or empty string if no citations
+        """
+        if not doc_citations:
+            return ""
+        indices = []
+        for dc in doc_citations:
+            try:
+                idx = all_citations.index(dc) + 1
+                indices.append(f"[{idx}]")
+            except ValueError:
+                pass
+        return "".join(indices)
 
     def _truncate_text(self, text: str, max_length: int) -> str:
         """Truncate text to a readable snippet length."""

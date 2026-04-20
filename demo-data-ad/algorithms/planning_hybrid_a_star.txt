@@ -1,0 +1,119 @@
+---
+document_type: algorithm_doc
+algorithm_type: planning
+algorithm_category: path_planning
+model: Hybrid_A_Star
+version: 1.0
+---
+
+# Hybrid A* 路径规划算法
+
+## 算法概述
+
+Hybrid A* 是一种结合 A* 和连续状态空间的路径规划算法，考虑车辆运动学约束，广泛应用于自动泊车和低速场景。
+
+## 核心特点
+
+### 状态空间
+- **位置**: (x, y)
+- **航向角**: θ
+- **离散化**: 0.2m × 0.2m × 15°
+
+### 运动模型
+- **前进**: v > 0
+- **后退**: v < 0
+- **转向**: δ ∈ [-δ_max, δ_max]
+- **车辆模型**: Bicycle Model
+
+### 启发式函数
+```
+h(n) = h_non_holonomic(n) + h_obstacle(n)
+```
+
+- **非完整约束**: Reeds-Shepp 曲线
+- **障碍物惩罚**: 距离场
+
+## 算法流程
+
+1. **初始化**: 起点加入 Open List
+2. **扩展节点**: 根据运动模型生成后继节点
+3. **碰撞检测**: 检查路径是否与障碍物碰撞
+4. **代价计算**: f(n) = g(n) + h(n)
+5. **目标检测**: 到达目标区域
+6. **路径平滑**: B-spline 平滑
+
+## 性能指标
+
+- **规划时间**: < 500 ms
+- **路径长度**: 接近最优
+- **成功率**: > 90%
+- **适用场景**: 泊车、窄道通行
+
+## 参数配置
+
+```yaml
+# 离散化
+xy_resolution: 0.2  # m
+theta_resolution: 15  # degree
+
+# 车辆参数
+wheelbase: 2.8  # m
+max_steer: 35  # degree
+min_turn_radius: 5.5  # m
+
+# 搜索参数
+max_iterations: 10000
+goal_tolerance: 0.5  # m
+```
+
+## 代码示例
+
+```python
+class HybridAStar:
+    def search(self, start, goal, obstacles):
+        open_list = PriorityQueue()
+        open_list.put((0, start))
+        
+        while not open_list.empty():
+            _, current = open_list.get()
+            
+            if self.is_goal(current, goal):
+                return self.reconstruct_path(current)
+            
+            for next_node in self.get_successors(current):
+                if not self.is_collision(next_node, obstacles):
+                    cost = self.calculate_cost(next_node)
+                    open_list.put((cost, next_node))
+        
+        return None  # 未找到路径
+```
+
+## 优化技巧
+
+### 1. Analytic Expansion
+- 在接近目标时尝试 Reeds-Shepp 曲线
+- 提前终止搜索，减少计算量
+
+### 2. Voronoi Field
+- 使用 Voronoi 图作为启发式
+- 引导搜索远离障碍物
+
+### 3. 双向搜索
+- 从起点和终点同时搜索
+- 在中间相遇时合并路径
+
+## 应用场景
+
+- **自动泊车**: 平行泊车、垂直泊车、斜列泊车
+- **窄道通行**: U-turn、三点掉头
+- **低速避障**: 停车场、小区道路
+
+## 参考资料
+
+- **论文**: Practical Search Techniques in Path Planning for Autonomous Driving
+- **代码**: https://github.com/karlkurzer/path_planner
+
+---
+
+**文档版本**: 1.0  
+**发布日期**: 2024-01-15

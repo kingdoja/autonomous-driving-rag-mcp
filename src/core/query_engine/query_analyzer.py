@@ -23,13 +23,21 @@ except ImportError:
 # Complexity detection patterns
 COMPARISON_KEYWORDS: Set[str] = {
     "不同", "区别", "差异", "对比", "比较", "相比", "异同",
-    "vs", "versus", "对照", "差别"
+    "vs", "versus", "对照", "差别",
+    # Autonomous driving specific
+    "优缺点", "优劣", "哪个更好", "哪种更好", "如何选择",
 }
 
 AGGREGATION_KEYWORDS: Set[str] = {
     "哪些", "总结", "汇总", "归纳", "概括", "列举", "所有",
-    "全部", "整理", "梳理", "综述"
+    "全部", "整理", "梳理", "综述",
+    # Autonomous driving specific
+    "融合方案", "技术选型", "方案对比", "技术方案", "整体方案",
+    "综合方案", "系统方案",
 }
+
+# Maximum sub-query count before suggesting decomposition
+MAX_COMPLEXITY_THRESHOLD = 5
 
 MULTI_PART_INDICATORS: Set[str] = {
     "以及", "还有", "另外", "此外", "同时", "并且", "而且",
@@ -118,6 +126,8 @@ class QueryAnalysis:
         detected_keywords: Keywords that triggered the classification
         detected_terms: Detected autonomous driving technical terms
         term_types: Mapping of detected terms to their types
+        exceeds_complexity: True when multi_part sub-query count > MAX_COMPLEXITY_THRESHOLD
+        decomposition_suggestion: Human-readable suggestion for splitting the query
     """
     
     complexity: Literal["simple", "multi_part", "comparison", "aggregation"]
@@ -127,17 +137,19 @@ class QueryAnalysis:
     detected_keywords: List[str] = field(default_factory=list)
     detected_terms: List[str] = field(default_factory=list)
     term_types: dict = field(default_factory=dict)
+    exceeds_complexity: bool = False
+    decomposition_suggestion: str = ""
 
 
 class QueryAnalyzer:
     """Analyzes queries to determine complexity and intent.
     
-    Uses keyword pattern matching optimized for Chinese medical queries
+    Uses keyword pattern matching optimized for autonomous driving queries
     to classify queries and route them to appropriate processing pipelines.
     
     Example:
         >>> analyzer = QueryAnalyzer()
-        >>> analysis = analyzer.analyze("WHO运输指南和质量管理指南有什么不同？")
+        >>> analysis = analyzer.analyze("激光雷达 vs 毫米波雷达的优缺点是什么？")
         >>> print(analysis.complexity)  # "comparison"
         >>> print(analysis.requires_multi_doc)  # True
     """
@@ -154,6 +166,7 @@ class QueryAnalyzer:
         self.system_terms = SYSTEM_TERMS
         self.regulation_terms = REGULATION_TERMS
         self.synonym_map = SYNONYM_MAP
+        self.max_complexity_threshold = MAX_COMPLEXITY_THRESHOLD
     
     def analyze(self, query: str) -> QueryAnalysis:
         """Analyze query to determine complexity and intent.
@@ -193,6 +206,11 @@ class QueryAnalyzer:
         # Extract sub-queries for multi-part queries
         sub_queries = self._extract_sub_queries(query) if complexity == "multi_part" else []
         
+        # Check if complexity exceeds threshold and build suggestion
+        exceeds_complexity, decomposition_suggestion = self._check_complexity_limit(
+            query, complexity, sub_queries
+        )
+        
         return QueryAnalysis(
             complexity=complexity,
             intent=intent,
@@ -200,7 +218,9 @@ class QueryAnalyzer:
             requires_multi_doc=requires_multi_doc,
             detected_keywords=detected_keywords,
             detected_terms=detected_terms,
-            term_types=term_types
+            term_types=term_types,
+            exceeds_complexity=exceeds_complexity,
+            decomposition_suggestion=decomposition_suggestion,
         )
     
     def _detect_intent(self, query_lower: str, detected_keywords: List[str]) -> Literal["retrieval", "boundary", "scope_inquiry"]:
@@ -305,6 +325,8 @@ class QueryAnalyzer:
     def _extract_sub_queries(self, query: str) -> List[str]:
         """Extract sub-questions from a multi-part query.
         
+        Handles splitting by question marks, conjunctions, and numbered lists.
+        
         Args:
             query: Original query string
             
@@ -313,28 +335,66 @@ class QueryAnalyzer:
         """
         sub_queries: List[str] = []
         
-        # Split by question marks
+        # Split by question marks first
         parts = re.split(r'[？?]', query)
-        for part in parts:
-            part = part.strip()
-            if part:
-                # Add question mark back
-                sub_queries.append(part + "？")
+        non_empty = [p.strip() for p in parts if p.strip()]
+        if len(non_empty) >= 2:
+            sub_queries = [p + "？" for p in non_empty]
+            return sub_queries
         
-        # If no question marks, try splitting by multi-part indicators
-        if len(sub_queries) <= 1:
-            # Try splitting by common conjunctions
-            for indicator in ["以及", "还有", "另外", "此外", "同时"]:
-                if indicator in query:
-                    parts = query.split(indicator)
-                    sub_queries = [p.strip() for p in parts if p.strip()]
-                    break
+        # Try splitting by numbered list patterns (1. 2. 3. or ①②③)
+        numbered = re.split(r'(?<=[。；;])\s*\d+[.、]\s*|(?<=\s)\d+[.、]\s*', query)
+        non_empty = [p.strip() for p in numbered if p.strip()]
+        if len(non_empty) >= 2:
+            return non_empty
+        
+        # Try splitting by common conjunctions (ordered by specificity)
+        for indicator in ["以及", "还有", "另外", "此外", "同时", "并且", "而且"]:
+            if indicator in query:
+                parts = query.split(indicator)
+                non_empty = [p.strip() for p in parts if p.strip()]
+                if len(non_empty) >= 2:
+                    return non_empty
         
         # Return original query if no splits found
-        if len(sub_queries) <= 1:
-            return [query]
+        return [query]
+    
+    def _check_complexity_limit(
+        self,
+        query: str,
+        complexity: str,
+        sub_queries: List[str],
+    ) -> tuple:
+        """Check if query complexity exceeds the system threshold.
         
-        return sub_queries
+        When a multi-part query has more sub-questions than MAX_COMPLEXITY_THRESHOLD,
+        the system suggests breaking it into smaller queries.
+        
+        Args:
+            query: Original query string
+            complexity: Detected complexity level
+            sub_queries: Extracted sub-queries
+            
+        Returns:
+            Tuple of (exceeds_complexity: bool, decomposition_suggestion: str)
+        """
+        if complexity != "multi_part":
+            return False, ""
+        
+        if len(sub_queries) <= self.max_complexity_threshold:
+            return False, ""
+        
+        # Build a helpful decomposition suggestion
+        suggestion_parts = [
+            f"您的查询包含 {len(sub_queries)} 个子问题，超出系统建议的最大复杂度（{self.max_complexity_threshold} 个）。",
+            "建议将查询拆分为以下独立问题分别查询：",
+        ]
+        for i, sq in enumerate(sub_queries[:self.max_complexity_threshold], 1):
+            suggestion_parts.append(f"  {i}. {sq}")
+        if len(sub_queries) > self.max_complexity_threshold:
+            suggestion_parts.append(f"  ... 以及其余 {len(sub_queries) - self.max_complexity_threshold} 个问题")
+        
+        return True, "\n".join(suggestion_parts)
     
     def _detect_ad_terms(self, query: str, query_lower: str) -> tuple:
         """Detect autonomous driving technical terms in the query.

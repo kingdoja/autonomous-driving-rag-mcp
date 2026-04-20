@@ -19,24 +19,33 @@ class EnhancedCitation:
     
     Attributes:
         document_name: Name of the source document
-        document_type: Type classification (guideline, sop, manual, training)
+        document_type: Type classification (guideline, sop, manual, training,
+            sensor_doc, algorithm_doc, regulation_doc, test_doc)
         section: Section or chapter name (if extractable)
         page: Page number in source document (if available)
         relevance_score: Retrieval relevance score (0-1)
         authority_score: Document authority score based on type (0-1)
         excerpt: Key sentence or phrase from the chunk
         chunk_id: Unique identifier for the source chunk
+        sensor_type: Sensor type if this is a sensor document (e.g. "LiDAR")
+        algorithm_type: Algorithm type if this is an algorithm document (e.g. "perception")
         metadata: Additional metadata from the chunk
     """
     
     document_name: str
-    document_type: Literal["guideline", "sop", "manual", "training", "unknown"]
+    document_type: Literal[
+        "guideline", "sop", "manual", "training",
+        "sensor_doc", "algorithm_doc", "regulation_doc", "test_doc",
+        "unknown",
+    ]
     relevance_score: float
     authority_score: float
     excerpt: str
     chunk_id: str
     section: Optional[str] = None
     page: Optional[int] = None
+    sensor_type: Optional[str] = None
+    algorithm_type: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -53,6 +62,10 @@ class EnhancedCitation:
             result["section"] = self.section
         if self.page is not None:
             result["page"] = self.page
+        if self.sensor_type is not None:
+            result["sensor_type"] = self.sensor_type
+        if self.algorithm_type is not None:
+            result["algorithm_type"] = self.algorithm_type
         if self.metadata:
             result["metadata"] = self.metadata
         return result
@@ -110,11 +123,54 @@ class CitationEnhancer:
     
     # Authority scores by document type (higher = more authoritative)
     _AUTHORITY_SCORES = {
+        # Medical assistant types
         "guideline": 1.0,
         "sop": 0.8,
         "manual": 0.6,
         "training": 0.4,
         "unknown": 0.3,
+        # Autonomous driving document types
+        "regulation_doc": 1.0,
+        "algorithm_doc": 0.8,
+        "sensor_doc": 0.6,
+        "test_doc": 0.4,
+    }
+    
+    # Autonomous driving document type patterns
+    _AD_DOC_TYPE_PATTERNS = {
+        "regulation_doc": [
+            r"regulation_doc",
+            r"gb[/_\-]?t\d",          # GB/T followed by number
+            r"iso\s*26262",
+            r"asil",
+            r"功能安全",
+        ],
+        "algorithm_doc": [
+            r"algorithm_doc",
+            r"perception_algo",
+            r"planning_algo",
+            r"slam_",
+            r"目标检测算法",
+            r"路径规划算法",
+        ],
+        "sensor_doc": [
+            r"sensor_doc",
+            r"lidar",
+            r"激光雷达",
+            r"radar_spec",
+            r"毫米波雷达",
+            r"ultrasonic_sensor",
+            r"超声波传感",
+            r"camera_calib",
+            r"标定文档",
+        ],
+        "test_doc": [
+            r"test_doc",
+            r"test_scenario",
+            r"test_case",
+            r"测试场景",
+            r"测试用例",
+        ],
     }
     
     # Section header patterns (Markdown and common formats)
@@ -179,6 +235,10 @@ class CitationEnhancer:
             if field_name in metadata:
                 extra_metadata[field_name] = metadata[field_name]
         
+        # Extract sensor_type and algorithm_type from metadata if available
+        sensor_type = metadata.get("sensor_type") or None
+        algorithm_type = metadata.get("algorithm_type") or None
+        
         return EnhancedCitation(
             document_name=document_name,
             document_type=document_type,
@@ -188,6 +248,8 @@ class CitationEnhancer:
             authority_score=authority_score,
             excerpt=excerpt,
             chunk_id=result.chunk_id,
+            sensor_type=sensor_type,
+            algorithm_type=algorithm_type,
             metadata=extra_metadata,
         )
     
@@ -284,7 +346,7 @@ class CitationEnhancer:
         self,
         document_name: str,
         metadata: Dict[str, Any],
-    ) -> Literal["guideline", "sop", "manual", "training", "unknown"]:
+    ) -> Literal["guideline", "sop", "manual", "training", "sensor_doc", "algorithm_doc", "regulation_doc", "test_doc", "unknown"]:
         """Classify document type based on name and metadata.
         
         Args:
@@ -300,8 +362,13 @@ class CitationEnhancer:
             if doc_type in self._AUTHORITY_SCORES:
                 return doc_type  # type: ignore
         
-        # Pattern matching on document name
+        # Pattern matching on document name — check AD types first
         name_lower = document_name.lower()
+        
+        for doc_type, patterns in self._AD_DOC_TYPE_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, name_lower, re.IGNORECASE):
+                    return doc_type  # type: ignore
         
         for doc_type, patterns in self._DOC_TYPE_PATTERNS.items():
             for pattern in patterns:

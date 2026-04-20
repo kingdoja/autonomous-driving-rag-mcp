@@ -268,6 +268,203 @@ class RRFFusion:
         
         return final_results
     
+    def fuse_with_ad_diversity(
+        self,
+        ranking_lists: List[List[RetrievalResult]],
+        query_complexity: str = "simple",
+        query_type: str = "general",
+        top_k: Optional[int] = None,
+        top_k_per_doc: int = 3,
+        trace: Optional[Any] = None,
+    ) -> List[RetrievalResult]:
+        """Fuse results with autonomous driving domain diversity enforcement.
+
+        Applies AD-specific document diversity rules on top of standard RRF fusion:
+
+        - Sensor comparison queries  → at least 2 sensor_doc documents
+        - Algorithm comparison queries → at least 2 algorithm_doc documents
+        - Multi-sensor fusion queries  → 3–5 sensor_doc documents
+
+        Falls back to standard ``fuse_with_document_grouping`` when no AD-specific
+        rule applies.
+
+        Args:
+            ranking_lists: List of ranking lists to fuse.
+            query_complexity: Complexity from QueryAnalysis
+                ("simple" | "multi_part" | "comparison" | "aggregation").
+            query_type: Domain query type from MetadataBooster / QueryAnalysis
+                ("sensor_query" | "algorithm_query" | "regulation_query" |
+                "test_query" | "general").
+            top_k: Maximum number of results to return.
+            top_k_per_doc: Maximum chunks per document (default: 3).
+            trace: Optional TraceContext for observability.
+
+        Returns:
+            Fused results with AD-specific document diversity enforced.
+
+        Raises:
+            ValueError: If document_grouper is not configured.
+        """
+        if self.document_grouper is None:
+            raise ValueError(
+                "Document grouper not configured. "
+                "Initialize RRFFusion with document_grouper parameter."
+            )
+
+        # Determine AD diversity requirements
+        # sensor comparison: comparison + sensor_query → min 2 sensor docs
+        # algorithm comparison: comparison + algorithm_query → min 2 algorithm docs
+        # multi-sensor fusion: aggregation + sensor_query → 3-5 sensor docs
+        is_sensor_comparison = (
+            query_complexity == "comparison" and query_type == "sensor_query"
+        )
+        is_algorithm_comparison = (
+            query_complexity == "comparison" and query_type == "algorithm_query"
+        )
+        is_sensor_fusion = (
+            query_complexity == "aggregation" and query_type == "sensor_query"
+        )
+
+        if not (is_sensor_comparison or is_algorithm_comparison or is_sensor_fusion):
+            # No AD-specific rule — fall back to generic document grouping
+            min_docs = 2 if query_complexity in ("comparison", "aggregation") else 1
+            return self.fuse_with_document_grouping(
+                ranking_lists,
+                top_k=top_k,
+                top_k_per_doc=top_k_per_doc,
+                min_docs=min_docs,
+                trace=trace,
+            )
+
+        # Fetch enough candidates for diversity enforcement
+        fusion_top_k = max((top_k or 20) * 3, 60)
+        fused_results = self.fuse(ranking_lists, top_k=fusion_top_k, trace=trace)
+
+        if not fused_results:
+            return []
+
+        import time
+        _t0 = time.monotonic()
+
+        # Group all candidates by document
+        grouped = self.document_grouper.group_by_document(
+            fused_results, top_k_per_doc=top_k_per_doc
+        )
+
+        if is_sensor_comparison:
+            # Require ≥ 2 sensor_doc documents
+            diverse_grouped = self._enforce_doc_type_diversity(
+                grouped, doc_type="sensor_doc", min_type_docs=2
+            )
+            rule = "sensor_comparison"
+        elif is_algorithm_comparison:
+            # Require ≥ 2 algorithm_doc documents
+            diverse_grouped = self._enforce_doc_type_diversity(
+                grouped, doc_type="algorithm_doc", min_type_docs=2
+            )
+            rule = "algorithm_comparison"
+        else:
+            # Multi-sensor fusion: require 3–5 sensor_doc documents
+            diverse_grouped = self._enforce_doc_type_diversity(
+                grouped, doc_type="sensor_doc", min_type_docs=3, max_type_docs=5
+            )
+            rule = "sensor_fusion"
+
+        # Flatten and re-sort by score
+        final_results: List[RetrievalResult] = []
+        for doc_chunks in diverse_grouped.values():
+            final_results.extend(doc_chunks)
+        final_results.sort(key=lambda r: r.score, reverse=True)
+
+        if top_k is not None and top_k > 0:
+            final_results = final_results[:top_k]
+
+        _elapsed = (time.monotonic() - _t0) * 1000.0
+        if trace is not None:
+            trace.record_stage("ad_diversity_grouping", {
+                "rule": rule,
+                "query_complexity": query_complexity,
+                "query_type": query_type,
+                "document_count": len(diverse_grouped),
+                "result_count": len(final_results),
+            }, elapsed_ms=_elapsed)
+
+        logger.debug(
+            f"AD diversity grouping ({rule}): {len(fused_results)} -> "
+            f"{len(final_results)} results, {len(diverse_grouped)} documents"
+        )
+
+        return final_results
+
+    def _enforce_doc_type_diversity(
+        self,
+        grouped: Dict[str, List[RetrievalResult]],
+        doc_type: str,
+        min_type_docs: int,
+        max_type_docs: Optional[int] = None,
+    ) -> Dict[str, List[RetrievalResult]]:
+        """Enforce minimum (and optional maximum) documents of a specific doc_type.
+
+        Partitions ``grouped`` into target-type docs and other docs, selects
+        the required number of target-type docs by total relevance, then
+        re-adds the remaining non-target docs so the caller still has full
+        context.
+
+        Args:
+            grouped: Document-grouped chunks (from DocumentGrouper.group_by_document).
+            doc_type: Metadata ``doc_type`` value to enforce (e.g. "sensor_doc").
+            min_type_docs: Minimum number of target-type documents to include.
+            max_type_docs: Optional cap on target-type documents (for fusion: 5).
+
+        Returns:
+            Filtered grouped dict with diversity constraints applied.
+        """
+        # Separate target-type docs from others
+        type_docs: Dict[str, List[RetrievalResult]] = {}
+        other_docs: Dict[str, List[RetrievalResult]] = {}
+
+        for doc_name, chunks in grouped.items():
+            # Determine doc_type from the first chunk's metadata
+            chunk_doc_type = chunks[0].metadata.get("doc_type", "") if chunks else ""
+            if chunk_doc_type == doc_type:
+                type_docs[doc_name] = chunks
+            else:
+                other_docs[doc_name] = chunks
+
+        available_type_count = len(type_docs)
+
+        if available_type_count < min_type_docs:
+            # Not enough target-type docs — log and return everything we have
+            logger.warning(
+                f"AD diversity: requested {min_type_docs} '{doc_type}' documents "
+                f"but only {available_type_count} available. "
+                "Returning all available documents."
+            )
+            return grouped
+
+        # Sort target-type docs by total relevance (descending)
+        sorted_type_docs = sorted(
+            type_docs.items(),
+            key=lambda kv: sum(c.score for c in kv[1]),
+            reverse=True,
+        )
+
+        # Apply max cap if specified
+        upper = max_type_docs if max_type_docs is not None else len(sorted_type_docs)
+        selected_count = max(min_type_docs, min(upper, available_type_count))
+        selected_type_docs = dict(sorted_type_docs[:selected_count])
+
+        # Combine selected target-type docs with all other docs
+        result = {**selected_type_docs, **other_docs}
+
+        logger.debug(
+            f"AD diversity enforced: {selected_count} '{doc_type}' docs selected "
+            f"(min={min_type_docs}, max={max_type_docs}), "
+            f"{len(other_docs)} other docs retained"
+        )
+
+        return result
+
     def fuse_with_weights(
         self,
         ranking_lists: List[List[RetrievalResult]],

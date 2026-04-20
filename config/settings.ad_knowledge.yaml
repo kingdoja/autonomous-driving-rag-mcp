@@ -291,6 +291,35 @@ boundary_validation:
   low_relevance_threshold: 0.3
 
 # =============================================================================
+# Performance Configuration (Caching and Batching)
+# =============================================================================
+performance:
+  # Query result caching
+  cache:
+    enabled: true
+    ttl: 3600  # Cache TTL in seconds (1 hour)
+    max_size: 1000  # Maximum number of cached queries
+    strategy: "lru"  # Least Recently Used eviction strategy
+  
+  # Batch processing
+  batching:
+    enabled: true
+    batch_size: 10  # Number of queries to batch together
+    timeout: 100  # Batch timeout in milliseconds
+  
+  # Connection pooling
+  connection_pool:
+    max_connections: 20
+    min_connections: 5
+    timeout: 30  # Connection timeout in seconds
+  
+  # Response time targets
+  targets:
+    simple_query: 2.0  # Target response time for simple queries (seconds)
+    complex_query: 4.0  # Target response time for complex queries (seconds)
+    multi_doc_query: 4.0  # Target response time for multi-document queries (seconds)
+
+# =============================================================================
 # Observability Configuration
 # =============================================================================
 observability:

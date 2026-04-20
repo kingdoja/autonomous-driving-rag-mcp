@@ -367,3 +367,139 @@ class TestADTermRecognition:
         assert "感知" in analysis.detected_terms
         assert analysis.complexity == "comparison"
         assert len(analysis.detected_terms) >= 3
+
+
+class TestADComplexQueryProcessing:
+    """Tests for autonomous driving complex query processing (Task 14.1)."""
+
+    # --- Comparison keyword detection ---
+
+    def test_ad_comparison_vs_keyword(self):
+        """Test 'vs' triggers comparison complexity."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("激光雷达 vs 毫米波雷达哪个更适合高速场景？")
+        assert analysis.complexity == "comparison"
+        assert "vs" in analysis.detected_keywords
+
+    def test_ad_comparison_pros_cons_keyword(self):
+        """Test '优缺点' triggers comparison complexity."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("请分析基于规则和基于学习的规划算法的优缺点")
+        assert analysis.complexity == "comparison"
+        assert "优缺点" in analysis.detected_keywords
+
+    def test_ad_comparison_requires_multi_doc(self):
+        """Comparison queries must require multi-document retrieval."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("摄像头和激光雷达的优劣对比")
+        assert analysis.complexity == "comparison"
+        assert analysis.requires_multi_doc is True
+
+    # --- Aggregation keyword detection ---
+
+    def test_ad_aggregation_fusion_plan_keyword(self):
+        """Test '融合方案' triggers aggregation complexity."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("请介绍多传感器融合方案的设计思路")
+        assert analysis.complexity == "aggregation"
+        assert "融合方案" in analysis.detected_keywords
+
+    def test_ad_aggregation_tech_selection_keyword(self):
+        """Test '技术选型' triggers aggregation complexity."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("自动驾驶感知模块的技术选型应该考虑哪些因素？")
+        assert analysis.complexity == "aggregation"
+        # Either '技术选型' or '哪些' may be the triggering keyword
+        assert any(k in analysis.detected_keywords for k in ("技术选型", "哪些"))
+
+    def test_ad_aggregation_plan_comparison_keyword(self):
+        """Test '方案对比' triggers comparison complexity (structured comparison)."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("请做一个传感器方案对比")
+        # "方案对比" contains "对比" which is a comparison keyword — comparison takes priority
+        assert analysis.complexity in ("comparison", "aggregation")
+        assert analysis.requires_multi_doc is True
+
+    def test_ad_aggregation_requires_multi_doc(self):
+        """Aggregation queries must require multi-document retrieval."""
+        analyzer = QueryAnalyzer()
+        # Use a pure aggregation query without scope/comparison keywords
+        analysis = analyzer.analyze("请汇总多传感器融合方案的技术要点")
+        assert analysis.complexity == "aggregation"
+        assert analysis.requires_multi_doc is True
+
+    # --- Multi-part query decomposition ---
+
+    def test_multi_part_decomposition_by_question_marks(self):
+        """Multi-part query split by question marks returns each part."""
+        analyzer = QueryAnalyzer()
+        query = "激光雷达的探测距离是多少？毫米波雷达的分辨率是多少？"
+        analysis = analyzer.analyze(query)
+        assert analysis.complexity == "multi_part"
+        assert len(analysis.sub_queries) == 2
+        assert all("？" in sq for sq in analysis.sub_queries)
+
+    def test_multi_part_decomposition_by_conjunction(self):
+        """Multi-part query split by conjunction returns each part."""
+        analyzer = QueryAnalyzer()
+        query = "请介绍感知算法的原理以及规划算法的实现方式"
+        analysis = analyzer.analyze(query)
+        assert analysis.complexity == "multi_part"
+        assert len(analysis.sub_queries) >= 2
+
+    def test_multi_part_sub_queries_non_empty(self):
+        """All extracted sub-queries must be non-empty strings."""
+        analyzer = QueryAnalyzer()
+        query = "LiDAR的视场角是多少？Camera的帧率是多少？Radar的探测距离是多少？"
+        analysis = analyzer.analyze(query)
+        assert all(sq.strip() for sq in analysis.sub_queries)
+
+    # --- Complexity limit detection ---
+
+    def test_exceeds_complexity_false_for_simple(self):
+        """Simple queries should not exceed complexity threshold."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("激光雷达的探测距离是多少？")
+        assert analysis.exceeds_complexity is False
+        assert analysis.decomposition_suggestion == ""
+
+    def test_exceeds_complexity_false_for_comparison(self):
+        """Comparison queries are not flagged as exceeding complexity."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("激光雷达 vs 毫米波雷达的优缺点")
+        assert analysis.exceeds_complexity is False
+
+    def test_exceeds_complexity_true_for_many_sub_queries(self):
+        """Multi-part query with > 5 sub-questions triggers exceeds_complexity."""
+        analyzer = QueryAnalyzer()
+        # 6 question marks → 6 sub-queries
+        query = "A？B？C？D？E？F？"
+        analysis = analyzer.analyze(query)
+        assert analysis.complexity == "multi_part"
+        assert analysis.exceeds_complexity is True
+
+    def test_decomposition_suggestion_content(self):
+        """Decomposition suggestion should mention sub-query count and threshold."""
+        analyzer = QueryAnalyzer()
+        query = "A？B？C？D？E？F？"
+        analysis = analyzer.analyze(query)
+        assert analysis.exceeds_complexity is True
+        assert "建议" in analysis.decomposition_suggestion
+        assert str(analyzer.max_complexity_threshold) in analysis.decomposition_suggestion
+
+    def test_exceeds_complexity_boundary_at_threshold(self):
+        """Exactly MAX_COMPLEXITY_THRESHOLD sub-queries should NOT exceed."""
+        analyzer = QueryAnalyzer()
+        # Build a query with exactly 5 question marks
+        query = "？".join(["问题" + str(i) for i in range(5)]) + "？"
+        analysis = analyzer.analyze(query)
+        assert analysis.exceeds_complexity is False
+
+    def test_new_fields_present_on_simple_query(self):
+        """QueryAnalysis always has exceeds_complexity and decomposition_suggestion."""
+        analyzer = QueryAnalyzer()
+        analysis = analyzer.analyze("摄像头的分辨率是多少？")
+        assert hasattr(analysis, "exceeds_complexity")
+        assert hasattr(analysis, "decomposition_suggestion")
+        assert analysis.exceeds_complexity is False
+        assert analysis.decomposition_suggestion == ""

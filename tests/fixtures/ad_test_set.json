@@ -1,0 +1,355 @@
+{
+  "description": "Autonomous Driving Knowledge Retrieval Test Set v0.1 - Standard evaluation set for AD knowledge retrieval system covering sensor queries, algorithm queries, regulation queries, and multi-document reasoning scenarios.",
+  "version": "0.1",
+  "collection": "ad_knowledge_v01",
+  "test_cases": [
+    {
+      "scenario_id": "S1",
+      "scenario_name": "Sensor Parameter Query",
+      "query": "激光雷达的探测距离和分辨率是多少？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "lidar_spec_vls128.txt",
+        "lidar_spec_hesai_at128.txt"
+      ],
+      "expected_doc_types": ["sensor_doc"],
+      "expected_keywords": ["探测距离", "分辨率", "激光雷达", "LiDAR"],
+      "min_citations": 1,
+      "expected_behavior": "返回激光雷达技术参数，优先返回传感器文档，包含探测距离和分辨率数值",
+      "failure_criteria": "返回算法文档而非传感器文档，或无引用",
+      "priority": "P0",
+      "demo_order": 1,
+      "notes": "传感器查询核心场景，验证 metadata boost 生效"
+    },
+    {
+      "scenario_id": "S2",
+      "scenario_name": "Sensor Calibration Query",
+      "query": "摄像头内参标定的具体步骤是什么？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "camera_calibration_intrinsic_extrinsic.txt",
+        "camera_spec_imx490.txt"
+      ],
+      "expected_doc_types": ["sensor_doc"],
+      "expected_keywords": ["内参标定", "摄像头", "标定步骤"],
+      "min_citations": 1,
+      "expected_behavior": "返回摄像头标定文档，包含具体标定步骤和方法",
+      "failure_criteria": "只返回通用算法文档，无具体标定步骤",
+      "priority": "P0",
+      "demo_order": 2
+    },
+    {
+      "scenario_id": "S3",
+      "scenario_name": "Perception Algorithm Query",
+      "query": "目标检测算法的原理和实现方法是什么？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "perception_yolo_object_detection.txt",
+        "perception_yolo_object_detection_v8.txt"
+      ],
+      "expected_doc_types": ["algorithm_doc"],
+      "expected_keywords": ["目标检测", "感知算法", "原理", "实现"],
+      "min_citations": 1,
+      "expected_behavior": "返回感知算法文档，包含算法原理和实现方法",
+      "failure_criteria": "返回传感器文档而非算法文档，或无算法原理说明",
+      "priority": "P0",
+      "demo_order": 3
+    },
+    {
+      "scenario_id": "S4",
+      "scenario_name": "Planning Algorithm Query",
+      "query": "路径规划算法有哪些常用方法？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "planning_hybrid_a_star.txt",
+        "planning_lattice_planner.txt"
+      ],
+      "expected_doc_types": ["algorithm_doc"],
+      "expected_keywords": ["路径规划", "规划算法", "方法"],
+      "min_citations": 1,
+      "expected_behavior": "返回规划算法文档，列出常用路径规划方法",
+      "failure_criteria": "只返回单一算法，或无算法分类说明",
+      "priority": "P0",
+      "demo_order": null
+    },
+    {
+      "scenario_id": "S5",
+      "scenario_name": "Control Algorithm Query",
+      "query": "MPC 控制算法的参数调优建议是什么？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "control_mpc_controller.txt",
+        "control_pid_longitudinal.txt"
+      ],
+      "expected_doc_types": ["algorithm_doc"],
+      "expected_keywords": ["MPC", "控制算法", "参数调优"],
+      "min_citations": 1,
+      "expected_behavior": "返回控制算法文档，包含 MPC 参数调优建议",
+      "failure_criteria": "只返回算法原理，无参数调优建议",
+      "priority": "P0",
+      "demo_order": null
+    },
+    {
+      "scenario_id": "S6",
+      "scenario_name": "National Standard Query",
+      "query": "GB/T 自动驾驶分级标准的具体内容是什么？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "gb_t_40429_2021_driving_automation_levels.txt",
+        "gb_t_40429_2021_driving_automation.txt"
+      ],
+      "expected_doc_types": ["regulation_doc"],
+      "expected_keywords": ["GB/T", "自动驾驶分级", "标准"],
+      "min_citations": 1,
+      "expected_behavior": "返回国家标准文档，包含自动驾驶分级定义和标准编号",
+      "failure_criteria": "返回非法规文档，或无标准编号",
+      "priority": "P0",
+      "demo_order": 4
+    },
+    {
+      "scenario_id": "S7",
+      "scenario_name": "ISO 26262 Query",
+      "query": "ISO 26262 功能安全标准中 ASIL 等级的定义是什么？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "iso_26262_functional_safety_overview.txt"
+      ],
+      "expected_doc_types": ["regulation_doc"],
+      "expected_keywords": ["ISO 26262", "功能安全", "ASIL"],
+      "min_citations": 1,
+      "expected_behavior": "返回 ISO 26262 文档，包含 ASIL 等级定义和说明",
+      "failure_criteria": "返回非功能安全文档，或无 ASIL 等级说明",
+      "priority": "P0",
+      "demo_order": 5
+    },
+    {
+      "scenario_id": "S8",
+      "scenario_name": "Test Scenario Query",
+      "query": "跟车场景的测试用例有哪些？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "functional_test_acc_following.txt",
+        "test_specification_scenario_based_testing.txt"
+      ],
+      "expected_doc_types": ["test_doc"],
+      "expected_keywords": ["跟车场景", "测试用例", "测试"],
+      "min_citations": 1,
+      "expected_behavior": "返回测试文档，列出跟车场景的测试用例",
+      "failure_criteria": "返回算法文档而非测试文档，或无具体测试用例",
+      "priority": "P0",
+      "demo_order": null
+    },
+    {
+      "scenario_id": "S9",
+      "scenario_name": "Sensor Comparison Query",
+      "query": "激光雷达和毫米波雷达的优缺点对比是什么？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "lidar_spec_vls128.txt",
+        "radar_spec_continental_ars548.txt"
+      ],
+      "expected_doc_types": ["sensor_doc"],
+      "expected_keywords": ["激光雷达", "毫米波雷达", "对比", "优缺点"],
+      "min_citations": 2,
+      "min_source_diversity": 2,
+      "expected_behavior": "从至少 2 个传感器文档检索内容，结构化对比优缺点",
+      "failure_criteria": "只返回单一传感器文档，或无对比结构",
+      "priority": "P0",
+      "demo_order": 6,
+      "notes": "多文档推理核心场景，验证文档多样性"
+    },
+    {
+      "scenario_id": "S10",
+      "scenario_name": "Algorithm Comparison Query",
+      "query": "基于规则的规划算法和基于学习的规划算法有什么区别？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "planning_lattice_planner.txt",
+        "planning_behavior_decision_fsm.txt"
+      ],
+      "expected_doc_types": ["algorithm_doc"],
+      "expected_keywords": ["规划算法", "基于规则", "基于学习", "区别"],
+      "min_citations": 2,
+      "min_source_diversity": 2,
+      "expected_behavior": "从至少 2 个算法文档检索内容，列出两种方法的区别",
+      "failure_criteria": "只返回单一算法文档，或无对比说明",
+      "priority": "P0",
+      "demo_order": null
+    },
+    {
+      "scenario_id": "S11",
+      "scenario_name": "Multi-Sensor Fusion Query",
+      "query": "多传感器融合方案需要哪些传感器配合？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "lidar_spec_vls128.txt",
+        "camera_spec_imx490.txt",
+        "radar_spec_continental_ars548.txt"
+      ],
+      "expected_doc_types": ["sensor_doc"],
+      "expected_keywords": ["多传感器融合", "传感器", "融合方案"],
+      "min_citations": 3,
+      "min_source_diversity": 3,
+      "expected_behavior": "汇总 3-5 个传感器文档的信息，提供完整引用",
+      "failure_criteria": "只返回 1-2 个传感器文档，或无融合方案说明",
+      "priority": "P0",
+      "demo_order": 7,
+      "notes": "多文档汇总场景，验证文档多样性"
+    },
+    {
+      "scenario_id": "S12",
+      "scenario_name": "Mixed Language Query",
+      "query": "LiDAR 的探测距离和 Camera 的视场角分别是多少？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "lidar_spec_vls128.txt",
+        "camera_spec_imx490.txt"
+      ],
+      "expected_doc_types": ["sensor_doc"],
+      "expected_keywords": ["LiDAR", "Camera", "探测距离", "视场角"],
+      "min_citations": 2,
+      "expected_behavior": "支持中英文混合查询，返回激光雷达和摄像头的参数",
+      "failure_criteria": "无法识别英文术语，或只返回单一传感器",
+      "priority": "P0",
+      "demo_order": null,
+      "notes": "术语识别场景，验证中英文混合支持"
+    },
+    {
+      "scenario_id": "S13",
+      "scenario_name": "Abbreviation Query",
+      "query": "ADAS 系统的核心功能有哪些？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "gb_t_40429_2021_driving_automation.txt",
+        "perception_yolo_object_detection.txt"
+      ],
+      "expected_doc_types": ["algorithm_doc", "regulation_doc"],
+      "expected_keywords": ["ADAS", "核心功能", "系统"],
+      "min_citations": 1,
+      "expected_behavior": "正确识别 ADAS 缩写，返回相关系统功能文档",
+      "failure_criteria": "无法识别 ADAS 缩写，或返回无关文档",
+      "priority": "P0",
+      "demo_order": null,
+      "notes": "缩写识别场景"
+    },
+    {
+      "scenario_id": "S14",
+      "scenario_name": "Synonym Query",
+      "query": "激光雷达的技术参数是什么？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "lidar_spec_vls128.txt",
+        "lidar_spec_hesai_at128.txt"
+      ],
+      "expected_doc_types": ["sensor_doc"],
+      "expected_keywords": ["激光雷达", "技术参数"],
+      "min_citations": 1,
+      "expected_behavior": "与 'LiDAR 的技术参数' 查询返回相似结果（同义词等价）",
+      "failure_criteria": "与英文查询结果差异过大",
+      "priority": "P1",
+      "demo_order": null,
+      "notes": "同义词等价性验证"
+    },
+    {
+      "scenario_id": "S15",
+      "scenario_name": "Boundary Test Scenario Query",
+      "query": "极端天气下的测试场景有哪些？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "boundary_test_extreme_weather.txt",
+        "safety_test_aeb_emergency_braking.txt"
+      ],
+      "expected_doc_types": ["test_doc"],
+      "expected_keywords": ["极端天气", "测试场景", "边界"],
+      "min_citations": 1,
+      "expected_behavior": "返回边界测试场景文档，包含极端天气测试方法",
+      "failure_criteria": "返回功能测试而非边界测试文档",
+      "priority": "P1",
+      "demo_order": null
+    },
+    {
+      "scenario_id": "S16",
+      "scenario_name": "Predictive Query Refusal",
+      "query": "预测下一代激光雷达的技术趋势是什么？",
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "expected_doc_types": [],
+      "expected_keywords": [],
+      "min_citations": 0,
+      "expected_behavior": "明确拒绝预测性查询，引导到现有技术文档。必须包含：1) 拒绝预测 2) 说明系统只提供事实性信息检索 3) 引导到现有技术资料",
+      "failure_criteria": "提供预测性结论或未来趋势判断",
+      "priority": "P0",
+      "demo_order": 8,
+      "validation_type": "response_boundary",
+      "notes": "边界控制核心场景，验证预测查询拒绝"
+    },
+    {
+      "scenario_id": "S17",
+      "scenario_name": "Real-time Diagnostic Refusal",
+      "query": "判断当前车辆传感器是否故障",
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "expected_doc_types": [],
+      "expected_keywords": [],
+      "min_citations": 0,
+      "expected_behavior": "明确拒绝实时诊断请求，引导到故障排查文档。必须包含：1) 拒绝实时诊断 2) 说明系统只提供知识检索 3) 引导到故障排查资料",
+      "failure_criteria": "提供实时诊断结论或故障判断",
+      "priority": "P0",
+      "demo_order": 9,
+      "validation_type": "response_boundary",
+      "notes": "边界控制核心场景，验证实时诊断拒绝"
+    },
+    {
+      "scenario_id": "S18",
+      "scenario_name": "Low Relevance Query",
+      "query": "如何制作一杯咖啡？",
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "expected_doc_types": [],
+      "expected_keywords": [],
+      "min_citations": 0,
+      "expected_behavior": "检测到低相关性查询，承认限制并建议使用自动驾驶相关关键词",
+      "failure_criteria": "尝试回答无关问题，或返回不相关的自动驾驶文档",
+      "priority": "P1",
+      "demo_order": null,
+      "validation_type": "response_boundary",
+      "notes": "低相关性检测场景"
+    },
+    {
+      "scenario_id": "S19",
+      "scenario_name": "Knowledge Base Scope Query",
+      "query": "系统的知识库主要覆盖哪些类型的资料？",
+      "expected_chunk_ids": [],
+      "expected_sources": [],
+      "expected_doc_types": [],
+      "expected_keywords": ["知识库", "覆盖", "资料类型"],
+      "min_citations": 0,
+      "expected_behavior": "准确说明当前 collection 覆盖的资料类型（传感器文档、算法文档、法规文档、测试文档），并避免夸大范围",
+      "failure_criteria": "虚构知识库范围或文档类型",
+      "priority": "P0",
+      "demo_order": 10,
+      "validation_type": "response_content",
+      "notes": "范围说明场景，验证 ScopeProvider 功能"
+    },
+    {
+      "scenario_id": "S20",
+      "scenario_name": "Multi-Module Algorithm Query",
+      "query": "感知、规划、控制三个模块的算法分别有哪些？",
+      "expected_chunk_ids": [],
+      "expected_sources": [
+        "perception_yolo_object_detection.txt",
+        "planning_hybrid_a_star.txt",
+        "control_mpc_controller.txt"
+      ],
+      "expected_doc_types": ["algorithm_doc"],
+      "expected_keywords": ["感知", "规划", "控制", "算法"],
+      "min_citations": 3,
+      "min_source_diversity": 3,
+      "expected_behavior": "从感知、规划、控制文档中各返回至少 1 个相关结果",
+      "failure_criteria": "只返回单一模块的算法，或无模块分类",
+      "priority": "P1",
+      "demo_order": null,
+      "notes": "多模块算法查询多样性验证"
+    }
+  ]
+}
